@@ -3,7 +3,7 @@ import pandas
 import math
 import time
 
-l1 = LightningRpc(".lightning/bitcoin/lightning-rpc")
+l1 = LightningRpc("~/.lightning/bitcoin/lightning-rpc")
 
 peers = l1.listpeers()
 
