@@ -2,8 +2,10 @@ from pyln.client import LightningRpc
 import pandas
 import math
 import time
+import sys
 
-l1 = LightningRpc("~/.lightning/bitcoin/lightning-rpc")
+l1 = LightningRpc(sys.argv[1])
+#l1 = LightningRpc("~/.lightning/bitcoin/lightning-rpc")
 
 peers = l1.listpeers()
 
