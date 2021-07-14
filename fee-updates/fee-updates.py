@@ -3,7 +3,7 @@ import pandas
 import math, time
 import sys, os, logging
 
-logging.basicConfig(filename=os.environ['HOME']+'/logs/fees.log', level=logging.INFO)
+logging.basicConfig(filename=os.environ['HOME']+'/logs/fees.log', level=logging.INFO,format='%(asctime)s - %(message)s', datefmt='%m/%d/%Y %I:%M:%S %p',filemode = 'a')
 
 l1 = LightningRpc(os.environ['HOME']+"/.lightning/bitcoin/lightning-rpc")
 
@@ -19,7 +19,7 @@ for i, row in dfp.iterrows():
     
     factor = 0.95
     balance = (msat_to_us+1000000)/msat_total
-    new_fee = 256*pow(math.floor(1/(balance*factor)),2)-1
+    new_fee = 128*pow(math.floor(1/(balance*factor)),2)-1
     
     ppm = row["channels"][0]["fee_proportional_millionths"]
     
