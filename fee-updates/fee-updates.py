@@ -18,7 +18,7 @@ for i, row in dfp.iterrows():
     msat_total = row["channels"][0]["msatoshi_total"]
     
     factor = 0.95
-    balance = msat_to_us/(msat_total+1)
+    balance = (msat_to_us+1)/(msat_total+1)
     new_fee = 256*pow(math.floor(1/(balance*factor)),2)-1
     
     ppm = row["channels"][0]["fee_proportional_millionths"]
