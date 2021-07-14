@@ -1,11 +1,11 @@
 from pyln.client import LightningRpc
 import pandas
-import math
-import time
-import sys
+import math, time
+import sys, os, logging
 
-l1 = LightningRpc(sys.argv[1])
-#l1 = LightningRpc("~/.lightning/bitcoin/lightning-rpc")
+logging.basicConfig(filename=os.environ['HOME']+'logs/fees.log', level=logging.INFO)
+
+l1 = LightningRpc(os.environ['HOME']+"/.lightning/bitcoin/lightning-rpc")
 
 peers = l1.listpeers()
 
@@ -17,17 +17,16 @@ for i, row in dfp.iterrows():
     msat_to_us = row["channels"][0]["msatoshi_to_us"]
     msat_total = row["channels"][0]["msatoshi_total"]
     
-    print(msat_to_us)
-    print(msat_total)
-    
     factor = 0.95
     balance = msat_to_us/(msat_total+1)
     new_fee = 256*pow(math.floor(1/(balance*factor)),2)-1
     
     ppm = row["channels"][0]["fee_proportional_millionths"]
     
-    print(new_fee)
-    
     if ppm!=new_fee :
+        logging.info("Update fee:")
+        logging.info("Channel balance for " + channel_id + " is "+ str(balance) )
+        logging.info("Old ppm " + str(ppm) + "; new "+ str(new_fee) )
         l1.setchannelfee(channel_id,0,new_fee)
+        
         time.sleep(5)
