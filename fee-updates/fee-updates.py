@@ -3,7 +3,7 @@ import pandas
 import math, time
 import sys, os, logging
 
-logging.basicConfig(filename=os.environ['HOME']+'logs/fees.log', level=logging.INFO)
+logging.basicConfig(filename=os.environ['HOME']+'/logs/fees.log', level=logging.INFO)
 
 l1 = LightningRpc(os.environ['HOME']+"/.lightning/bitcoin/lightning-rpc")
 
