@@ -28,6 +28,6 @@ for i, row in dfp.iterrows():
             logging.info("Update fee:")
             logging.info("Channel balance for " + channel_id + " is "+ str(balance) )
             logging.info("Old ppm " + str(ppm) + "; new "+ str(new_fee) )
-            l1.setchannelfee(channel_id,0,new_fee)
+            l1.setchannelfee(channel_id,1,new_fee)
             
             time.sleep(5)
