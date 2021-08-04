@@ -21,6 +21,9 @@ for i, row in dfp.iterrows():
         factor = 0.95
         balance = (msat_to_us+1000000)/msat_total
         new_fee = 128*pow(math.floor(1/(balance*factor)),2)-1
+        base_fee = 1
+        if balance>1:
+            new_fee=0
         
         ppm = row["channels"][0]["fee_proportional_millionths"]
         
@@ -28,6 +31,6 @@ for i, row in dfp.iterrows():
             logging.info("Update fee:")
             logging.info("Channel balance for " + channel_id + " is "+ str(balance) )
             logging.info("Old ppm " + str(ppm) + "; new "+ str(new_fee) )
-            l1.setchannelfee(channel_id,1,new_fee)
+            l1.setchannelfee(channel_id,base_fee,new_fee)
             
             time.sleep(5)
