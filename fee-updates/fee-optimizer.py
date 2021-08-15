@@ -33,7 +33,7 @@ def read_config(section, filename):
 
 # ----------------
 
-def get_graph_from_cli(rpc=os.environ['HOME']+"/.lightning/bitcoin/lightning-rpc",save=True):
+def get_graph_from_cli(rpc=".lightning/bitcoin/lightning-rpc",save=True):
     
     l1 = LightningRpc(rpc)
     
@@ -62,7 +62,8 @@ def run_route_finding(conf):
         G = nx.read_gpickle(data_conf['file'])
         exec_time = datetime.strptime(data_conf['datetime'], "%Y-%m-%d %H:%M:%S")### override time of execution by time of data pull as defined in config
     elif data_conf['method'] == 'cli':
-        G = get_graph_from_cli(data_conf['save'])
+        rpc = os.environ['HOME']+"/.lightning/bitcoin/lightning-rpc"
+        G = get_graph_from_cli(rpc, data_conf['save'])
     
     active_edges = (
         (source,dest,data)
