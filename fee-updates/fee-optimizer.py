@@ -89,73 +89,75 @@ def run_route_finding(conf):
     
     nodes = list(DG.nodes())
     
-    i_node = nodes[random.randint(0,len(nodes)-1)]
-    
-    tx_sat = math.floor(pow(1000*random.random(),2))
-    
-    for source, dest, key, data in DG.out_edges(i_node,keys=True,data=True):
-        DG[source][dest][key]['base_fee_millisatoshi'] = 0
-        DG[source][dest][key]['fee_per_millionth'] = 0
-    
-    
-    print("---")
-    print(tx_sat)
-    
-    i_DG = nx.MultiDiGraph(DG)
-    useless_edges = []
-    # calculate fee per tx size
-    for source, dest, key, data in i_DG.out_edges(keys=True,data=True):
-        if i_DG[source][dest][key]['satoshis'] < 2.5*tx_sat:
-            useless_edges.append((source, dest, key))
-        else:
-            a = i_DG[source][dest][key]['base_fee_millisatoshi']
-            b = i_DG[source][dest][key]['fee_per_millionth']
-            i_DG[source][dest][key]['fee'] = math.floor(a + tx_sat*b/1000)
-    
-    for s,d,k in useless_edges:
-        i_DG.remove_edge(s, d, k)
-    
-    found = False
-    destinations = []
-    
-    for i_nodes in nx.strongly_connected_components(i_DG):
-        if i_node in i_nodes:
-            break
-    
-    ii_DG = i_DG.subgraph(i_nodes)
-    
-    fees, paths = nx.single_source_dijkstra(ii_DG,i_node,weight="fee")
-    for dest,path in paths.items():
-        if mynode in path and dest!=mynode:
-            found=True
-            channel = channels[path[path.index(mynode)+1]]
-            peer = path[path.index(mynode)-1]
-            destinations.append((dest,peer,channel))
-    
-    comp_path = comp_fees = {}
-    if found:
-        i_DG2 = nx.MultiDiGraph(i_DG)
-        i_DG2.remove_node(mynode)
-        comp_fees, comp_paths = nx.single_source_dijkstra(i_DG2,i_node,weight="fee")
+    for i in range(int(data_conf['number_of_runs'])):
         
-        val = []
-        for to, peer, ch in destinations:
-            fee = comp_fees[to] - fees[to]
-            val.append((i_node,to,mynode,peer,ch,tx_sat,fee,exec_time.strftime('%Y-%m-%d %H:%M:%S'),version))
+        i_node = nodes[random.randint(0,len(nodes)-1)]
+        
+        tx_sat = math.floor(pow(1000*random.random(),2))
+        
+        for source, dest, key, data in DG.out_edges(i_node,keys=True,data=True):
+            DG[source][dest][key]['base_fee_millisatoshi'] = 0
+            DG[source][dest][key]['fee_per_millionth'] = 0
         
         
-        db_config = read_config("mysql",conf)
-        conn = MySQLConnection(**db_config)
+        print("---")
+        print(tx_sat)
         
-        mycursor = conn.cursor()
+        i_DG = nx.MultiDiGraph(DG)
+        useless_edges = []
+        # calculate fee per tx size
+        for source, dest, key, data in i_DG.out_edges(keys=True,data=True):
+            if i_DG[source][dest][key]['satoshis'] < 2.5*tx_sat:
+                useless_edges.append((source, dest, key))
+            else:
+                a = i_DG[source][dest][key]['base_fee_millisatoshi']
+                b = i_DG[source][dest][key]['fee_per_millionth']
+                i_DG[source][dest][key]['fee'] = math.floor(a + tx_sat*b/1000)
         
-        sql = "INSERT INTO routing_competition (source, destination, node, peer, channel_id, tx, fee, gossip_date, version) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)"
-        mycursor.executemany(sql, val)
+        for s,d,k in useless_edges:
+            i_DG.remove_edge(s, d, k)
         
-        conn.commit()
+        found = False
+        destinations = []
         
-        mycursor.close()
-        conn.close()
+        for i_nodes in nx.strongly_connected_components(i_DG):
+            if i_node in i_nodes:
+                break
+        
+        ii_DG = i_DG.subgraph(i_nodes)
+        
+        fees, paths = nx.single_source_dijkstra(ii_DG,i_node,weight="fee")
+        for dest,path in paths.items():
+            if mynode in path and dest!=mynode:
+                found=True
+                channel = channels[path[path.index(mynode)+1]]
+                peer = path[path.index(mynode)-1]
+                destinations.append((dest,peer,channel))
+        
+        comp_path = comp_fees = {}
+        if found:
+            i_DG2 = nx.MultiDiGraph(i_DG)
+            i_DG2.remove_node(mynode)
+            comp_fees, comp_paths = nx.single_source_dijkstra(i_DG2,i_node,weight="fee")
+            
+            val = []
+            for to, peer, ch in destinations:
+                fee = comp_fees[to] - fees[to]
+                val.append((i_node,to,mynode,peer,ch,tx_sat,fee,exec_time.strftime('%Y-%m-%d %H:%M:%S'),version))
+            
+            
+            db_config = read_config("mysql",conf)
+            conn = MySQLConnection(**db_config)
+            
+            mycursor = conn.cursor()
+            
+            sql = "INSERT INTO routing_competition (source, destination, node, peer, channel_id, tx, fee, gossip_date, version) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)"
+            mycursor.executemany(sql, val)
+            
+            conn.commit()
+            
+            mycursor.close()
+            conn.close()
 
 
 
