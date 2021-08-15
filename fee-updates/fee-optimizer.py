@@ -142,8 +142,10 @@ def run_route_finding(conf):
             
             val = []
             for to, peer, ch in destinations:
-                fee = comp_fees[to] - fees[to]
-                val.append((i_node,to,mynode,peer,ch,tx_sat,fee,exec_time.strftime('%Y-%m-%d %H:%M:%S'),version))
+                theirs = comp_fees.get(to)
+                if theirs:
+                    fee = theirs - fees[to]
+                    val.append((i_node,to,mynode,peer,ch,tx_sat,fee,exec_time.strftime('%Y-%m-%d %H:%M:%S'),version))
             
             
             db_config = read_config("mysql",conf)
