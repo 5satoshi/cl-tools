@@ -33,7 +33,7 @@ def read_config(section, filename):
 
 # ----------------
 
-def get_graph_from_cli(rpc=".lightning/bitcoin/lightning-rpc",save=True):
+def get_graph_from_cli(rpc=os.environ['HOME']+"/.lightning/bitcoin/lightning-rpc",save=True):
     
     l1 = LightningRpc(rpc)
     
