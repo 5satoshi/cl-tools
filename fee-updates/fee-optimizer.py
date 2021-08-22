@@ -51,7 +51,7 @@ def get_graph_from_cli(rpc=".lightning/bitcoin/lightning-rpc",save=True):
 
 
 def run_route_finding(conf):
-    version = "0.1"
+    version = "0.2"
     
     data_conf = read_config("data",conf)
     
@@ -93,7 +93,7 @@ def run_route_finding(conf):
         
         i_node = nodes[random.randint(0,len(nodes)-1)]
         
-        tx_sat = math.floor(pow(1000*random.random(),2))
+        tx_sat = random.randint(1,1000000)
         
         for source, dest, key, data in DG.out_edges(i_node,keys=True,data=True):
             DG[source][dest][key]['base_fee_millisatoshi'] = 0
