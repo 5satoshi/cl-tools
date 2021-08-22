@@ -147,11 +147,12 @@ def run_route_finding(conf):
                     fee = theirs - fees[to]
                     val.append((i_node,to,mynode,peer,ch,tx_sat,fee,exec_time.strftime('%Y-%m-%d %H:%M:%S'),version))
             
-            
             db_config = read_config("mysql",conf)
             conn = MySQLConnection(**db_config)
             
             mycursor = conn.cursor()
+            
+            print(val[1])
             
             sql = "INSERT INTO routing_competition (source, destination, node, peer, channel_id, tx, fee, gossip_date, version) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)"
             mycursor.executemany(sql, val)
