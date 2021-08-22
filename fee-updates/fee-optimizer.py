@@ -152,7 +152,6 @@ def run_route_finding(conf):
             
             mycursor = conn.cursor()
             
-            print(val[1])
             
             sql = "INSERT INTO routing_competition (source, destination, node, peer, channel_id, tx, fee, gossip_date, version) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)"
             mycursor.executemany(sql, val)
