@@ -51,7 +51,7 @@ def get_graph_from_cli(rpc=".lightning/bitcoin/lightning-rpc",save=True):
 
 
 def run_route_finding(conf):
-    version = "0.2"
+    version = "0.3"
     
     data_conf = read_config("data",conf)
     
