@@ -112,7 +112,7 @@ def run_route_finding(conf):
             else:
                 a = i_DG[source][dest][key]['base_fee_millisatoshi']
                 b = i_DG[source][dest][key]['fee_per_millionth']
-                i_DG[source][dest][key]['fee'] = math.floor(a + tx_sat*b/1000)
+                i_DG[source][dest][key]['fee'] = math.floor(a + tx_sat*b*1000)
         
         for s,d,k in useless_edges:
             i_DG.remove_edge(s, d, k)
