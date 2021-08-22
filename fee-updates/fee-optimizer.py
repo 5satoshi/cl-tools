@@ -45,7 +45,7 @@ def get_graph_from_cli(rpc=".lightning/bitcoin/lightning-rpc",save=True):
     
     if save:
         prefix = datetime.now()
-        nx.write_gpickle(DG,prefix.strftime("%Y-%m-%dT%H:%M:%S")+'_lightning.pkl')
+        nx.write_gpickle(DG,"fee-optimizer-data/" + prefix.strftime("%Y-%m-%dT%H:%M:%S")+'_lightning.pkl')
     
     return DG
 
