@@ -51,7 +51,7 @@ def get_graph_from_cli(rpc=".lightning/bitcoin/lightning-rpc",save=True):
 
 
 def run_route_finding(conf):
-    version = "0.3"
+    version = "0.4"
     
     data_conf = read_config("data",conf)
     
@@ -95,15 +95,15 @@ def run_route_finding(conf):
         
         tx_sat = random.randint(1,1000000)
         
-        for source, dest, key, data in DG.out_edges(i_node,keys=True,data=True):
-            DG[source][dest][key]['base_fee_millisatoshi'] = 0
-            DG[source][dest][key]['fee_per_millionth'] = 0
+        i_DG = nx.MultiDiGraph(DG)
         
+        for source, dest, key, data in i_DG.out_edges(i_node,keys=True,data=True):
+            i_DG[source][dest][key]['base_fee_millisatoshi'] = 0
+            i_DG[source][dest][key]['fee_per_millionth'] = 0
         
         print("---")
         print(tx_sat)
         
-        i_DG = nx.MultiDiGraph(DG)
         useless_edges = []
         # calculate fee per tx size
         for source, dest, key, data in i_DG.out_edges(keys=True,data=True):
@@ -136,7 +136,7 @@ def run_route_finding(conf):
         
         comp_path = comp_fees = {}
         if found:
-            i_DG2 = nx.MultiDiGraph(i_DG)
+            i_DG2 = nx.MultiDiGraph(ii_DG)
             i_DG2.remove_node(mynode)
             comp_fees, comp_paths = nx.single_source_dijkstra(i_DG2,i_node,weight="fee")
             
