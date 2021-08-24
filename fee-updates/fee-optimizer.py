@@ -51,7 +51,7 @@ def get_graph_from_cli(rpc=".lightning/bitcoin/lightning-rpc",save=True):
 
 
 def run_route_finding(conf):
-    version = "0.4"
+    version = "0.1"
     
     data_conf = read_config("data",conf)
     
@@ -111,7 +111,7 @@ def run_route_finding(conf):
                 useless_edges.append((source, dest, key))
             else:
                 a = i_DG[source][dest][key]['base_fee_millisatoshi']
-                b = i_DG[source][dest][key]['fee_per_millionth']
+                b = i_DG[source][dest][key]['fee_per_millionth']/1000000
                 i_DG[source][dest][key]['fee'] = math.floor(a + tx_sat*b*1000)
         
         for s,d,k in useless_edges:
