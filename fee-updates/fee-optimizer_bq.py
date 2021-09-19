@@ -148,7 +148,7 @@ def run_route_finding(conf):
                 theirs = comp_fees.get(to)
                 if theirs:
                     fee = theirs - fees[to]
-                    val.append((i_node,to,mynode,peer,ch,tx_sat,fee,exec_time.strftime('%Y-%m-%d %H:%M:%S'),version))
+                    val.append({'source':i_node,'destination':to,'node':mynode,'peer':peer,'channel_id':ch,'tx':tx_sat,'fee':fee,'gossip_date':exec_time.strftime('%Y-%m-%d %H:%M:%S'),'version':version})
             
             errors = bq_client.insert_rows_json(table, val)
             if errors == []:
