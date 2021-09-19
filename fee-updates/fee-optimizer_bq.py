@@ -150,7 +150,7 @@ def run_route_finding(conf):
                     val.append((i_node,to,mynode,peer,ch,tx_sat,fee,exec_time.strftime('%Y-%m-%d %H:%M:%S'),version))
             
             
-            sql = "INSERT INTO `version_1.cl_tools` (source, destination, node, peer, channel_id, tx, fee, gossip_date, version) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)"
+            sql = "INSERT INTO `lightning-fee-optimizer.version_1.cl_tools` (source, destination, node, peer, channel_id, tx, fee, gossip_date, version) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)"
             client.query(sql)
             
 
