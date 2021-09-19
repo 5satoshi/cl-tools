@@ -11,6 +11,7 @@ from datetime import datetime
 from google.cloud import bigquery
 
 client = bigquery.Client()
+table = bq_client.get_table("{}.{}.{}".format('lightning-fee-optimizer', 'version_1', 'cl_tools'))  ###todo move into config
 
 def read_config(section, filename):
     """ Read database configuration file and return a dictionary object
@@ -149,11 +150,9 @@ def run_route_finding(conf):
                     fee = theirs - fees[to]
                     val.append((i_node,to,mynode,peer,ch,tx_sat,fee,exec_time.strftime('%Y-%m-%d %H:%M:%S'),version))
             
-            
-            sql = "INSERT INTO `lightning-fee-optimizer.version_1.cl_tools` (source, destination, node, peer, channel_id, tx, fee, gossip_date, version) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)"
-            client.query(sql)
-            
-
+            errors = bq_client.insert_rows_json(table, val)
+            if errors == []:
+                print("success")
 
 
 if __name__ == "__main__":
