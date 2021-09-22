@@ -34,7 +34,7 @@ def get_graph_from_cli(rpc=".lightning/bitcoin/lightning-rpc",save=True):
 def run_route_finding(conf):
     version = "0.1"
     
-    data_conf = read_config("data",conf)
+    data_conf = helper.read_config("data",conf)
     
     G = nx.MultiDiGraph()
     exec_time = datetime.now()
@@ -58,7 +58,7 @@ def run_route_finding(conf):
     # clean for connected component of mynode
     DG = wDG.subgraph(max(nx.strongly_connected_components(wDG),key=len))
     
-    mynode = read_config("node",conf)["id"]
+    mynode = helper.read_config("node",conf)["id"]
     
     ### set mynode channel fees to zero for G calc 1
     channels = {}
@@ -138,7 +138,7 @@ def run_route_finding(conf):
             else:
                 if storage=="bigquery":
                     bq_client = bigquery.Client()
-                    table = bq_client.get_table(read_config("bigquery",conf)["table"])  ###todo move into config
+                    table = bq_client.get_table(helper.read_config("bigquery",conf)["table"])  ###todo move into config
                     errors = bq_client.insert_rows_json(table, val)
                     if errors == []:
                         logging.info("Data successfully submitted to bigquery")
@@ -146,7 +146,7 @@ def run_route_finding(conf):
                         logging.error(errors)
                         
                 elif storage=="mysql":
-                    db_config = read_config("mysql",conf)
+                    db_config = helper.read_config("mysql",conf)
                     conn = MySQLConnection(**db_config)
                     
                     mycursor = conn.cursor()
@@ -164,7 +164,7 @@ if __name__ == "__main__":
     # execute only if run as a script
     cfg_file = sys.argv[1]
     
-    log_config = read_config("logging",cfg_file)
+    log_config = helper.read_config("logging",cfg_file)
     logging.basicConfig(filename=os.environ['HOME']+log_config["path"], level=logging.INFO,format='%(asctime)s - %(message)s', datefmt='%m/%d/%Y %I:%M:%S %p',filemode = 'a')
 
     run_route_finding(cfg_file)

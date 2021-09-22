@@ -35,7 +35,7 @@ def get_graph_from_cli(rpc=".lightning/bitcoin/lightning-rpc",save=True):
 def run_route_finding(conf):
     version = "0.1"
     
-    data_conf = read_config("data",conf)
+    data_conf = helper.read_config("data",conf)
     
     G = nx.MultiDiGraph()
     exec_time = datetime.now()
@@ -59,7 +59,7 @@ def run_route_finding(conf):
     # clean for connected component of mynode
     DG = wDG.subgraph(max(nx.strongly_connected_components(wDG),key=len))
     
-    mynode = read_config("node",conf)["id"]
+    mynode = helper.read_config("node",conf)["id"]
     
     ### set mynode channel fees to zero for G calc 1
     channels = {}
