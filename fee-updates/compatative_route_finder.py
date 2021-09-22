@@ -165,7 +165,7 @@ if __name__ == "__main__":
     cfg_file = sys.argv[1]
     
     log_config = helper.read_config("logging",cfg_file)
-    logging.basicConfig(filename=os.environ['HOME']+log_config["path"], level=logging.INFO,format='%(asctime)s - %(message)s', datefmt='%m/%d/%Y %I:%M:%S %p',filemode = 'a')
+    logging.basicConfig(filename=os.environ['HOME']+"/"+log_config["path"], level=logging.INFO,format='%(asctime)s - %(message)s', datefmt='%m/%d/%Y %I:%M:%S %p',filemode = 'a')
 
     run_route_finding(cfg_file)
 
