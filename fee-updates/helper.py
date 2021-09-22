@@ -1,4 +1,5 @@
 #!/usr/bin/python
+from configparser import ConfigParser
 
 def read_config(section, filename):
     """ Read database configuration file and return a dictionary object
