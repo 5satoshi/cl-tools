@@ -131,7 +131,8 @@ def run_route_finding(conf):
                     elif storage=="mysql":
                         val.append((i_node,to,mynode,peer,ch,tx_sat,fee,exec_time.strftime('%Y-%m-%d %H:%M:%S'),version))
                     else:
-                        ###logging
+                        logging.info({'source':i_node,'destination':to,'node':mynode,'peer':peer,'channel_id':ch,'tx':tx_sat,'fee':fee,'gossip_date':exec_time.strftime('%Y-%m-%d %H:%M:%S'),'version':version})
+            
             if val==[]:
                 logging.info("No compatative route")
             else:
