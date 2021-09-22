@@ -1,6 +1,6 @@
 #!/usr/bin/python
 
-import sys, math, os, random
+import sys, math, os, random, logging
 import networkx as nx
 import pandas as pd
 import matplotlib.pyplot as plt
@@ -9,29 +9,10 @@ from configparser import ConfigParser
 from pyln.client import LightningRpc
 from datetime import datetime
 
+from google.cloud import bigquery
 
-def read_config(section, filename):
-    """ Read database configuration file and return a dictionary object
-    :param filename: name of the configuration file
-    :param section: section of database configuration
-    :return: a dictionary of database parameters
-    """
-    # create parser and read ini configuration file
-    parser = ConfigParser()
-    parser.read(filename)
-    
-    # get section
-    d = {}
-    if parser.has_section(section):
-        items = parser.items(section)
-        for item in items:
-            d[item[0]] = item[1]
-    else:
-        raise Exception('{0} not found in the {1} file'.format(section,     filename))
-    
-    return d
+import helper.py
 
-# ----------------
 
 def get_graph_from_cli(rpc=".lightning/bitcoin/lightning-rpc",save=True):
     
@@ -101,8 +82,8 @@ def run_route_finding(conf):
             i_DG[source][dest][key]['base_fee_millisatoshi'] = 0
             i_DG[source][dest][key]['fee_per_millionth'] = 0
         
-        print("---")
-        print(tx_sat)
+        logging.info("---")
+        logging.info("TX amount: " + str(tx_sat))
         
         useless_edges = []
         # calculate fee per tx size
@@ -145,28 +126,45 @@ def run_route_finding(conf):
                 theirs = comp_fees.get(to)
                 if theirs:
                     fee = theirs - fees[to]
-                    val.append((i_node,to,mynode,peer,ch,tx_sat,fee,exec_time.strftime('%Y-%m-%d %H:%M:%S'),version))
-            
-            db_config = read_config("mysql",conf)
-            conn = MySQLConnection(**db_config)
-            
-            mycursor = conn.cursor()
-            
-            
-            sql = "INSERT INTO routing_competition (source, destination, node, peer, channel_id, tx, fee, gossip_date, version) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)"
-            mycursor.executemany(sql, val)
-            
-            conn.commit()
-            
-            mycursor.close()
-            conn.close()
-
+                    if storage=="bigquery":
+                        val.append({'source':i_node,'destination':to,'node':mynode,'peer':peer,'channel_id':ch,'tx':tx_sat,'fee':fee,'gossip_date':exec_time.strftime('%Y-%m-%d %H:%M:%S'),'version':version})
+                    elif storage=="mysql":
+                        val.append((i_node,to,mynode,peer,ch,tx_sat,fee,exec_time.strftime('%Y-%m-%d %H:%M:%S'),version))
+                    else:
+                        ###logging
+            if val==[]:
+                logging.info("No compatative route")
+            else:
+                if storage=="bigquery":
+                    bq_client = bigquery.Client()
+                    table = bq_client.get_table(read_config("bigquery",conf)["table"])  ###todo move into config
+                    errors = bq_client.insert_rows_json(table, val)
+                    if errors == []:
+                        logging.info("Data successfully submitted to bigquery")
+                    else:
+                        logging.error(errors)
+                        
+                elif storage=="mysql":
+                    db_config = read_config("mysql",conf)
+                    conn = MySQLConnection(**db_config)
+                    
+                    mycursor = conn.cursor()
+                    
+                    sql = "INSERT INTO routing_competition (source, destination, node, peer, channel_id, tx, fee, gossip_date, version) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)"
+                    mycursor.executemany(sql, val)
+                    
+                    conn.commit()
+                    
+                    mycursor.close()
+                    conn.close()
 
 
 if __name__ == "__main__":
     # execute only if run as a script
     cfg_file = sys.argv[1]
-        
+    
+    logging.basicConfig(filename=os.environ['HOME']+'/logs/fees.log', level=logging.INFO,format='%(asctime)s - %(message)s', datefmt='%m/%d/%Y %I:%M:%S %p',filemode = 'a')
+
     run_route_finding(cfg_file)
 
 

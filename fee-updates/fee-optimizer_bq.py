@@ -10,31 +10,10 @@ from datetime import datetime
 
 from google.cloud import bigquery
 
+import helper.py
+
 bq_client = bigquery.Client()
-table = bq_client.get_table("{}.{}.{}".format('lightning-fee-optimizer', 'version_1', 'cl_tools'))  ###todo move into config
-
-def read_config(section, filename):
-    """ Read database configuration file and return a dictionary object
-    :param filename: name of the configuration file
-    :param section: section of database configuration
-    :return: a dictionary of database parameters
-    """
-    # create parser and read ini configuration file
-    parser = ConfigParser()
-    parser.read(filename)
-    
-    # get section
-    d = {}
-    if parser.has_section(section):
-        items = parser.items(section)
-        for item in items:
-            d[item[0]] = item[1]
-    else:
-        raise Exception('{0} not found in the {1} file'.format(section,     filename))
-    
-    return d
-
-# ----------------
+table = bq_client.get_table("lightning-fee-optimizer.version_1.cl_tools")  ###todo move into config
 
 def get_graph_from_cli(rpc=".lightning/bitcoin/lightning-rpc",save=True):
     
