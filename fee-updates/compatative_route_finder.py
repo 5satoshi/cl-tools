@@ -11,7 +11,7 @@ from datetime import datetime
 
 from google.cloud import bigquery
 
-import helper.py
+import helper
 
 
 def get_graph_from_cli(rpc=".lightning/bitcoin/lightning-rpc",save=True):

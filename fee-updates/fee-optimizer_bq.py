@@ -10,7 +10,7 @@ from datetime import datetime
 
 from google.cloud import bigquery
 
-import helper.py
+import helper
 
 bq_client = bigquery.Client()
 table = bq_client.get_table("lightning-fee-optimizer.version_1.cl_tools")  ###todo move into config
