@@ -35,6 +35,7 @@ def run_route_finding(conf):
     version = "0.1"
     
     data_conf = helper.read_config("data",conf)
+    storage = data_conf["storage"]
     
     G = nx.MultiDiGraph()
     exec_time = datetime.now()
