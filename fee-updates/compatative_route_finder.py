@@ -163,7 +163,8 @@ if __name__ == "__main__":
     # execute only if run as a script
     cfg_file = sys.argv[1]
     
-    logging.basicConfig(filename=os.environ['HOME']+'/logs/fees.log', level=logging.INFO,format='%(asctime)s - %(message)s', datefmt='%m/%d/%Y %I:%M:%S %p',filemode = 'a')
+    log_config = read_config("logging",cfg_file)
+    logging.basicConfig(filename=os.environ['HOME']+log_config["path"], level=logging.INFO,format='%(asctime)s - %(message)s', datefmt='%m/%d/%Y %I:%M:%S %p',filemode = 'a')
 
     run_route_finding(cfg_file)
 
