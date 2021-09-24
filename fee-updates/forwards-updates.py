@@ -32,7 +32,7 @@ engine = create_engine("mysql+pymysql://{user}:{pw}@{host}/{db}"
 				.format(host=db_config["host"], db=db_config["database"], user=db_config["user"], pw=db_config["password"]))
  
 yesterday = date.today() - timedelta(days=1)
-filtered_df = dfp.loc[(dfp["resolved_time"].dt.date == yesterday)]
+filtered_df = dfp.loc[(dfp["received_time"].dt.date == yesterday)]
 
 # Convert dataframe to sql table
 filtered_df.to_sql('forwardings', engine, index=False, if_exists="append")
