@@ -25,7 +25,7 @@ yesterday = date.today() - timedelta(days=1)
 filtered_df = dfp.loc[(dfp["received_time"].dt.date == yesterday)]
 
 db_config = helper.read_config("db",cfg_file)
-if db_config["database"]="bq":
+if db_config["database"]=="bq":
     filtered_df.to_gbq(db_config["table"],if_exists='append')
     
 else:
