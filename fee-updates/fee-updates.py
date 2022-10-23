@@ -1,7 +1,8 @@
-from pyln.client import LightningRpc
+from pyln.client import LightningRpc, Millisatoshi
 import pandas
 import math, time
 import sys, os, logging
+import random
 
 logging.basicConfig(filename=os.environ['HOME']+'/logs/fees.log', level=logging.INFO,format='%(asctime)s - %(message)s', datefmt='%m/%d/%Y %I:%M:%S %p',filemode = 'a')
 
@@ -10,6 +11,8 @@ l1 = LightningRpc(os.environ['HOME']+"/.lightning/bitcoin/lightning-rpc")
 peers = l1.listpeers()
 
 dfp = pandas.DataFrame(peers["peers"])
+
+test =  True
 
 for i, row in dfp.iterrows():
     if len(row["channels"])>0:
@@ -22,16 +25,26 @@ for i, row in dfp.iterrows():
         factor = 0.95
         balance = (msat_to_us+1000000)/msat_total
         new_fee = val*pow(math.floor(1/(balance*factor)),2)-1
-        base_fee = 1
+        if new_fee>10000:
+            new_fee=10000
+        base_fee = 0
         if balance>1:
             new_fee=0
         
         ppm = row["channels"][0]["fee_proportional_millionths"]
+        htlc_max = int(Millisatoshi(row["channels"][0]["maximum_htlc_out_msat"]))
+        new_htlc_max = int(msat_to_us * (1- random.random() * 0.1))
+        if new_htlc_max < 0:
+            new_htlc_max = 0
         
-        if ppm!=new_fee :
+        if msat_to_us > htlc_max + (0.1 * msat_total) or msat_to_us < htlc_max:
             logging.info("Update fee:")
             logging.info("Channel balance for " + channel_id + " is "+ str(balance) )
             logging.info("Old ppm " + str(ppm) + "; new "+ str(new_fee) )
-            l1.setchannelfee(channel_id,base_fee,new_fee)
+            logging.info("Old htlc_max " + str(htlc_max) + "; new "+ str(new_htlc_max) )
+            if not test:
+                l1.setchannel(id=channel_id,feebase=base_fee,feeppm=new_fee,htlcmax=new_htlc_max)
+            else:
+                print(channel_id + " feebase=", str(base_fee) + ",feeppm=" + str(new_fee) + ",htlcmax=" + str(new_htlc_max))
             
             time.sleep(5)
