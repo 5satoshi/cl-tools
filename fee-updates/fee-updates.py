@@ -33,11 +33,11 @@ for i, row in dfp.iterrows():
         
         ppm = row["channels"][0]["fee_proportional_millionths"]
         htlc_max = int(Millisatoshi(row["channels"][0]["maximum_htlc_out_msat"]))
-        new_htlc_max = int(msat_to_us * (1- random.random() * 0.1))
+        new_htlc_max = int(msat_to_us - random.random() * 0.1 * msat_total)
         if new_htlc_max < 0:
-            new_htlc_max = 0
+            new_htlc_max = msat_to_us
         
-        if msat_to_us > htlc_max + (0.1 * msat_total) or msat_to_us < htlc_max:
+        if msat_to_us - (0.1 * msat_total) > htlc_max  or msat_to_us < htlc_max:
             logging.info("Update fee:")
             logging.info("Channel balance for " + channel_id + " is "+ str(balance) )
             logging.info("Old ppm " + str(ppm) + "; new "+ str(new_fee) )
