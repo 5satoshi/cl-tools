@@ -12,7 +12,7 @@ peers = l1.listpeers()
 
 dfp = pandas.DataFrame(peers["peers"])
 
-test =  True
+test =  False
 
 for i, row in dfp.iterrows():
     if len(row["channels"])>0:
