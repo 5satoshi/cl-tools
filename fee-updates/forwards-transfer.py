@@ -14,8 +14,7 @@ if __name__ == "__main__":
     #cfg_file = "forwards-transfer.conf"
     db_config = helper.read_config("mysql",cfg_file)
 
-    engine = create_engine("mysql+pymysql://{user}:{pw}@{host}/{db}"
-                                    .format(host=db_config["host"], db=db_config["database"], user=db_config["user"], pw=db_config["password"]))
+    engine = create_engine("mysql+pymysql://{user}:{pw}@{host}/{db}".format(host=db_config["host"], db=db_config["database"], user=db_config["user"], pw=db_config["password"]))
 
     table_name = db_config["table"]
     table_df = pd.read_sql_table(

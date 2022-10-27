@@ -40,8 +40,9 @@ for i, row in dfp.iterrows():
         if msat_to_us - (0.1 * msat_total) > htlc_max  or msat_to_us < htlc_max:
             logging.info("Update fee:")
             logging.info("Channel balance for " + channel_id + " is "+ str(balance) )
-            logging.info("Old ppm " + str(ppm) + "; new "+ str(new_fee) )
+            logging.info("Liquidity is now "+ str(msat_to_us) )
             logging.info("Old htlc_max " + str(htlc_max) + "; new "+ str(new_htlc_max) )
+            logging.info("Old ppm " + str(ppm) + "; new "+ str(new_fee) )
             if not test:
                 l1.setchannel(id=channel_id,feebase=base_fee,feeppm=new_fee,htlcmax=new_htlc_max)
             else:
