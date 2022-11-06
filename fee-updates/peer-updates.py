@@ -22,11 +22,11 @@ dfp = pandas.DataFrame(peers["peers"])
 
 db_config = helper.read_config("db",cfg_file)
 if db_config["database"]=="bq":
-    dfp.to_gbq(db_config["table"],if_exists='append')
+    dfp.to_gbq(db_config["table"],if_exists='replace')
     
 else:
     # Create SQLAlchemy engine to connect to MySQL Database
     engine = create_engine("mysql+pymysql://{user}:{pw}@{host}/{db}".format(host=db_config["host"], db=db_config["database"], user=db_config["user"], pw=db_config["password"]))
     # Convert dataframe to sql table
-    dfp.to_sql('peers', engine, index=False, if_exists="append")
+    dfp.to_sql('peers', engine, index=False, if_exists="replace")
 
