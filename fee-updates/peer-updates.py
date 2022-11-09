@@ -19,6 +19,7 @@ l1 = LightningRpc(os.environ['HOME']+"/.lightning/bitcoin/lightning-rpc")
 peers = l1.listpeers()
 
 dfp = pandas.json_normalize(peers["peers"],record_path=["channels"],meta=['id', 'connected'])
+dfp = dfp.drop(columns=['features', 'state_changes','status','htlcs'])
 
 db_config = helper.read_config("db",cfg_file)
 if db_config["database"]=="bq":
