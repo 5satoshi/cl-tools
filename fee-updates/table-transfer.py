@@ -22,4 +22,5 @@ if __name__ == "__main__":
         con=engine
     )
     
-    table_df.to_gbq(helper.read_config("bigquery",cfg_file)["table"],if_exists='replace')
+    bqconf = helper.read_config("bigquery",cfg_file)
+    table_df.to_gbq(bqconf["table"],project_id=bqconf["project_id"],if_exists='replace')
