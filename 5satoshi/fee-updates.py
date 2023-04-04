@@ -29,7 +29,7 @@ for i, row in dfp.iterrows():
             new_fee=10000
         base_fee = 0
         if balance>1:
-            new_fee=0
+            new_fee=1
         
         ppm = row["channels"][0]["fee_proportional_millionths"]
         htlc_max = int(Millisatoshi(row["channels"][0]["maximum_htlc_out_msat"]))
