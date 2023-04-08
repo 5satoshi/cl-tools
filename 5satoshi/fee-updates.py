@@ -21,15 +21,11 @@ for i, row in dfp.iterrows():
         msat_to_us = row["channels"][0]["msatoshi_to_us"]
         msat_total = row["channels"][0]["msatoshi_total"]
         
-        val = 1 # 128
-        factor = 0.95
-        balance = (msat_to_us+1000000)/msat_total
-        new_fee = val*pow(math.floor(1/(balance*factor)),2)-1
+        balance = msat_to_us/msat_total
+        new_fee = pow(math.floor(1/balance),2)
         if new_fee>10000:
             new_fee=10000
         base_fee = 0
-        if balance>1:
-            new_fee=1
         
         ppm = row["channels"][0]["fee_proportional_millionths"]
         htlc_max = int(Millisatoshi(row["channels"][0]["maximum_htlc_out_msat"]))
