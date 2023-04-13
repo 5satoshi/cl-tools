@@ -1,66 +1,55 @@
 #!/usr/bin/python
 
-import sys, math, os, random, logging
+import math
 import networkx as nx
-import pandas as pd
-import matplotlib.pyplot as plt
-from mysql.connector import MySQLConnection, Error
-from configparser import ConfigParser
-from pyln.client import LightningRpc
-from datetime import datetime
-
 from google.cloud import bigquery
+import pandas as pd
 
+client = bigquery.Client()
+sql="SELECT * FROM `lightning-fee-optimizer.version_1.channels`"
+channels = client.query(sql).to_dataframe()
 
-def get_graph_from_cli(rpc=".lightning/bitcoin/lightning-rpc",save=True):
-    
-    l1 = LightningRpc(rpc)
-    
-    channels = l1.listchannels()
-    
-    dfc = pd.DataFrame(channels["channels"])
-    
-    DG = nx.from_pandas_edgelist(dfc,"source","destination",edge_attr=True, create_using=nx.MultiDiGraph())
-    
-    if save:
-        prefix = datetime.now()
-        nx.write_gpickle(DG,"fee-optimizer-data/" + prefix.strftime("%Y-%m-%dT%H:%M:%S")+'_lightning.pkl')
-    
-    return DG
+sql="SELECT * FROM `lightning-fee-optimizer.version_1.nodes`"
+nodes = client.query(sql).to_dataframe()
 
-rpc = os.environ['HOME']+"/.lightning/bitcoin/lightning-rpc"
-G = get_graph_from_cli(rpc, False)
+DG = nx.from_pandas_edgelist(channels[channels.active],"source","destination",edge_attr=True, create_using=nx.MultiDiGraph())
 
-avg_tx_size = 80000
+tx_types = [("common",80000), ("micro",200), ("macro",4000000)]
 
-active_edges = (
-    (source,dest,data)
-    for source, dest, data
-    in G.edges(data=True)
-    if data['active']==True
-)
+for tx_type,tx_sat in tx_types:
+    #tx_sat = 4000000 #macro ~1000
+    #tx_sat = 80000 #common ~20
+    #tx_sat = 200 #micro ~0.05
 
-wDG = nx.MultiDiGraph(active_edges)
-
-DG = wDG.subgraph(max(nx.strongly_connected_components(wDG),key=len))
-
-useless_edges = []
-for source, dest, key, data in DG.out_edges(keys=True,data=True):
-    if DG[source][dest][key]['satoshis'] < 2.5*avg_tx_size:
-        #TODO remove edges with low htlc_minimum_msats
-        useless_edges.append((source, dest, key))
-    else:
+    for source, dest, key, data in DG.out_edges(keys=True,data=True):
         a = DG[source][dest][key]['base_fee_millisatoshi']
-        b = DG[source][dest][key]['fee_per_millionth'] 
-        DG[source][dest][key]['fee'] = math.floor(a + avg_tx_size*b*1000)
+        b = DG[source][dest][key]['fee_per_millionth']/1000000
+        DG[source][dest][key]['fee'] = math.floor(a + tx_sat*b*1000) * 1000 + 1
 
-for s,d,k in useless_edges:
-    DG.remove_edge(s, d, k)
+    sufficient_edges = (
+        (source,dest,data)
+        for source, dest, data
+        in DG.edges(data=True)
+        if int(data['htlc_maximum_msat'][:-4])>tx_sat*1000 and int(data['htlc_minimum_msat'][:-4])<tx_sat*1000
+    )
 
-centrality = nx.betweenness_centrality(DG,weight='fee')
+    filtered_DG = nx.MultiDiGraph(sufficient_edges)
+    newDG = filtered_DG.subgraph(max(nx.strongly_connected_components(filtered_DG),key=len))
 
-res = sorted(centrality.items(), key=lambda x:x[1], reverse=True)
+    start = pd.Timestamp.now()
 
-dict(list(res.items())[0:5])
-list(res.keys()).index('animal')
+    betweenness = nx.betweenness_centrality(newDG,normalized=True,weight='fee')
 
+    stop = pd.Timestamp.now()
+
+    print('Time: ', stop - start) 
+
+    nodescores = pd.DataFrame.from_dict(data=betweenness,orient='index',columns=['shortest_path_share'])
+    nodescores['rank'] = nodescores['shortest_path_share'].rank(method='min',ascending=False)
+    nodescores = nodescores.join(nodes[['nodeid','alias']].set_index('nodeid'))
+
+    nodescores["timestamp"] = max(channels["last_update"])
+    nodescores["nodeid"] = nodescores.index
+    nodescores["type"] = tx_type
+
+    nodescores.to_gbq("lightning-fee-optimizer.version_1.betweenness",if_exists='append')
