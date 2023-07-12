@@ -40,15 +40,6 @@ filtered_df = dff.loc[(dff["received_time"] >= qtime.tz_localize(None) )]
 
 filtered_df.to_gbq("lightning-fee-optimizer.version_1.forwardings",if_exists='append')
 
-### Peer -------------------------------------------------
-
-peers = l1.listpeers()
-
-dfp = pandas.json_normalize(peers["peers"],record_path=["channels"],meta=['id', 'connected'],sep="_")
-dfp = dfp.drop(columns=['features', 'state_changes','status','htlcs'])
-
-dfp.to_gbq("lightning-fee-optimizer.version_1.peers",if_exists='replace')
-
 
 ### Channels ---------------------------------------------
 
@@ -59,8 +50,13 @@ dfc['last_update'] = pandas.to_datetime(dfc['last_update'], unit='s')
 
 dfc.to_gbq("lightning-fee-optimizer.version_1.channels",if_exists='replace')
 
+### Nodes ---------------------------------------------
 
+nodes = l1.listnodes()
 
+dfn = pandas.DataFrame(nodes["nodes"])
+dfn['last_timestamp'] = pandas.to_datetime(dfn['last_timestamp'], unit='s')
 
+dfn.to_gbq("lightning-fee-optimizer.version_1.nodes",if_exists='replace')
 
 
