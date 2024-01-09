@@ -12,9 +12,18 @@ l1 = LightningRpc(os.environ['HOME']+"/.lightning/bitcoin/lightning-rpc")
 
 forwards = l1.listforwards()
 
+for tx in forwards["forwards"]:
+    tx["in_msatoshi"]=tx["in_msat"].millisatoshis
+    if tx["status"] != 'local_failed':
+        tx["out_msatoshi"]=tx["out_msat"].millisatoshis
+        tx["fee"]=tx["fee_msat"].millisatoshis
+
 dff = pandas.DataFrame(forwards["forwards"])
 dff["received_time"] = pandas.to_datetime(dff["received_time"], unit = 's')
 dff["resolved_time"] = pandas.to_datetime(dff["resolved_time"], unit = 's')
+
+del dff["created_index"]
+del dff["updated_index"]
 
 client = bigquery.Client()
 
