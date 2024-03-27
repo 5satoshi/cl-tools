@@ -19,8 +19,8 @@ for i, row in dfp.iterrows():
     if len(row["channels"])>0:
         channel_id = row["channels"][0]["channel_id"]
         
-        msat_to_us = row["channels"][0]["msatoshi_to_us"]
-        msat_total = row["channels"][0]["msatoshi_total"]
+        msat_to_us = row["channels"][0]["to_us_msat"].millisatoshis
+        msat_total = row["channels"][0]["total_msat"].millisatoshis
         
         balance = (msat_to_us+1)/msat_total
         new_fee = pow(math.floor(1/balance),2)
