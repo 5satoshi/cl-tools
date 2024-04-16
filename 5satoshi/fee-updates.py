@@ -53,5 +53,7 @@ peers = l1.listpeers()
 
 dfp = pandas.json_normalize(peers["peers"],record_path=["channels"],meta=['id', 'connected'],sep="_")
 dfp = dfp.drop(columns=['features', 'state_changes','status','htlcs'])
+dfp['msatoshi_to_us'] = dfp['to_us_msat'].apply(lambda x: x.millisatoshis)
+dfp['msatoshi_total'] = dfp['total_msat'].apply(lambda x: x.millisatoshis)
 
 dfp.to_gbq("lightning-fee-optimizer.version_1.peers",if_exists='replace')
