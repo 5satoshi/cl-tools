@@ -52,12 +52,15 @@ logging.basicConfig(filename=os.environ['HOME']+'/logs/fees.log', level=logging.
 update_fees(os.environ['HOME']+"/.lightning/bitcoin/lightning-rpc")
 
 ### db update -------------------------------------------------
-l1 = LightningRpc(rpcpath)
+l1 = LightningRpc(os.environ['HOME']+"/.lightning/bitcoin/lightning-rpc")
 peers = l1.listpeers()
 
 dfp = pandas.json_normalize(peers["peers"],record_path=["channels"],meta=['id', 'connected'],sep="_")
 dfp = dfp.drop(columns=['features', 'state_changes','status','htlcs'])
 dfp['msatoshi_to_us'] = dfp['to_us_msat'].apply(lambda x: x.millisatoshis)
+dfp['msatoshi_to_us_max'] = dfp['max_to_us_msat'].apply(lambda x: x.millisatoshis)
+dfp['msatoshi_to_us_min'] = dfp['min_to_us_msat'].apply(lambda x: x.millisatoshis)
+dfp['out_msatoshi_fulfilled'] = dfp['out_fulfilled_msat'].apply(lambda x: x.millisatoshis)
 dfp['msatoshi_total'] = dfp['total_msat'].apply(lambda x: x.millisatoshis)
 
 dfp.to_gbq("lightning-fee-optimizer.version_1.peers",if_exists='replace')
