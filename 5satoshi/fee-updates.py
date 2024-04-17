@@ -52,7 +52,7 @@ logging.basicConfig(filename=os.environ['HOME']+'/logs/fees.log', level=logging.
 update_fees(os.environ['HOME']+"/.lightning/bitcoin/lightning-rpc")
 
 ### db update -------------------------------------------------
-
+l1 = LightningRpc(rpcpath)
 peers = l1.listpeers()
 
 dfp = pandas.json_normalize(peers["peers"],record_path=["channels"],meta=['id', 'connected'],sep="_")
