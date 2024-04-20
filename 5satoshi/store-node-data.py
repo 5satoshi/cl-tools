@@ -4,50 +4,43 @@ import math, time
 import sys, os, logging
 from datetime import datetime, date, timedelta
 from google.cloud import bigquery
-
-l1 = LightningRpc(os.environ['HOME']+"/.lightning/bitcoin/lightning-rpc")
-
-
-### Forwardings --------------------------------------------
-
-forwards = l1.listforwards()
-
-for tx in forwards["forwards"]:
-    tx["in_msatoshi"]=tx["in_msat"].millisatoshis
-    if tx["status"] != 'local_failed':
-        tx["out_msatoshi"]=tx["out_msat"].millisatoshis
-        tx["fee"]=tx["fee_msat"].millisatoshis
-
-dff = pandas.DataFrame(forwards["forwards"])
-dff["received_time"] = pandas.to_datetime(dff["received_time"], unit = 's')
-dff["resolved_time"] = pandas.to_datetime(dff["resolved_time"], unit = 's')
-
-del dff["created_index"]
-del dff["updated_index"]
+#fwds = l1.listforwards(index='created',start=0,limit=10)
 
 client = bigquery.Client()
 
 status_query = """
-    SELECT status, min(received_time) as mintime, max(received_time) as maxtime
+    SELECT status, min(received_time) as mintime, max(received_time) as maxtime, min(created_index) as minindex, max(created_index) as maxindex
     FROM `lightning-fee-optimizer.version_1.forwardings` group by status
 """
 
 status_result = client.query(status_query).to_dataframe() 
 
-offered_mintimes = status_result.mintime[status_result.status=='offered']
-if offered_mintimes.empty:
-    qtime = status_result.maxtime.max() + pandas.DateOffset(microseconds=1000)
+offered_minindex = status_result.minindex[status_result.status=='offered']
+
+if offered_minindex.empty:
+    index_start = status_result.maxindex.max() + 1
 else:
-    qtime = offered_mintimes.iloc[0]
+    index_start = offered_minindex.iloc[0]
     
     del_query = """DELETE 
         FROM `lightning-fee-optimizer.version_1.forwardings` 
-        WHERE received_time >= """
-    del_result = client.query(del_query+ "'" + qtime.strftime('%Y-%m-%d %X') + "'")
+        WHERE created_index >= """
+    del_result = client.query(del_query + index)
 
-filtered_df = dff.loc[(dff["received_time"] >= qtime.tz_localize(None) )]
+### Forwardings --------------------------------------------
 
-filtered_df.to_gbq("lightning-fee-optimizer.version_1.forwardings",if_exists='append')
+
+l1 = LightningRpc(os.environ['HOME']+"/.lightning/bitcoin/lightning-rpc")
+#index_start = 2692198
+
+forwards = l1.listforwards(index='created',start=int(index_start))
+
+dff = pandas.DataFrame(forwards["forwards"])
+dff["received_time"] = pandas.to_datetime(dff["received_time"], unit = 's')
+dff["resolved_time"] = pandas.to_datetime(dff["resolved_time"], unit = 's')
+
+ddf.to_gbq("lightning-fee-optimizer.version_1.forwardings",if_exists='append')
+
 
 
 ### Channels ---------------------------------------------
