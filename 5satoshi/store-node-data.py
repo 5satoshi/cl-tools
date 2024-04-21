@@ -4,7 +4,6 @@ import math, time
 import sys, os, logging
 from datetime import datetime, date, timedelta
 from google.cloud import bigquery
-#fwds = l1.listforwards(index='created',start=0,limit=10)
 
 client = bigquery.Client()
 
@@ -25,7 +24,7 @@ else:
     del_query = """DELETE 
         FROM `lightning-fee-optimizer.version_1.forwardings` 
         WHERE created_index >= """
-    del_result = client.query(del_query + index)
+    del_result = client.query(del_query + index_start)
 
 ### Forwardings --------------------------------------------
 
@@ -33,13 +32,29 @@ else:
 l1 = LightningRpc(os.environ['HOME']+"/.lightning/bitcoin/lightning-rpc")
 #index_start = 2692198
 
-forwards = l1.listforwards(index='created',start=int(index_start))
+#chunk_size=200000
+#all_fwds = []
+#index_start = 0
 
-dff = pandas.DataFrame(forwards["forwards"])
+#for i in range(14):
+    #print(i)
+    #forwards = l1.listforwards(index='created',start=index_start+1,limit=chunk_size)
+    #all_fwds = all_fwds + forwards["forwards"]
+    #index_start = index_start + chunk_size
+
+event_query = "SELECT * FROM lightning-fee-optimizer.version_1.forwardings where created_index=1"
+exmpl_evt = client.query(event_query).to_dataframe().to_dict('records')
+exmpl_evt[0]['received_time'] = exmpl_evt[0]['received_time'].timestamp()
+exmpl_evt[0]['resolved_time'] = exmpl_evt[0]['resolved_time'].timestamp()
+
+forwards = l1.listforwards(index='created',start=int(index_start))
+all_fwds = exmpl_evt + forwards["forwards"]
+
+dff = pandas.DataFrame(all_fwds)
 dff["received_time"] = pandas.to_datetime(dff["received_time"], unit = 's')
 dff["resolved_time"] = pandas.to_datetime(dff["resolved_time"], unit = 's')
 
-ddf.to_gbq("lightning-fee-optimizer.version_1.forwardings",if_exists='append')
+dff.drop(0).to_gbq("lightning-fee-optimizer.version_1.forwardings",if_exists='append')
 
 
 
