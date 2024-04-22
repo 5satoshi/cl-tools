@@ -29,7 +29,7 @@ for tx_type,tx_sat in tx_types:
         (source,dest,data)
         for source, dest, data
         in DG.edges(data=True)
-        if int(data['htlc_maximum_msat'][:-4])>tx_sat*1000 and int(data['htlc_minimum_msat'][:-4])<tx_sat*1000
+        if int(data['htlc_maximum_msat'])>tx_sat*1000 and int(data['htlc_minimum_msat'])<tx_sat*1000
     )
     
     filtered_DG = nx.MultiDiGraph(sufficient_edges)
