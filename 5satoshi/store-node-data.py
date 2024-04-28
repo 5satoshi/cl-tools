@@ -42,19 +42,21 @@ l1 = LightningRpc(os.environ['HOME']+"/.lightning/bitcoin/lightning-rpc")
     #all_fwds = all_fwds + forwards["forwards"]
     #index_start = index_start + chunk_size
 
-event_query = "SELECT * FROM lightning-fee-optimizer.version_1.forwardings where created_index=1"
-exmpl_evt = client.query(event_query).to_dataframe().to_dict('records')
-exmpl_evt[0]['received_time'] = exmpl_evt[0]['received_time'].timestamp()
-exmpl_evt[0]['resolved_time'] = exmpl_evt[0]['resolved_time'].timestamp()
+event_query = """SELECT * FROM (SELECT * FROM `lightning-fee-optimizer.version_1.forwardings` where style is not null and failreason is not null LIMIT 1) A 
+UNION ALL 
+SELECT * FROM (SELECT * FROM `lightning-fee-optimizer.version_1.forwardings` where style is not null and updated_index is not null and resolved_time is not null LIMIT 1) B"""
+exmpl_evt = client.query(event_query).to_dataframe()
+exmpl_evt.received_time = exmpl_evt.received_time.astype(int)/10**9
+exmpl_evt.resolved_time = exmpl_evt.resolved_time.astype(int)/10**9
 
 forwards = l1.listforwards(index='created',start=int(index_start))
-all_fwds = exmpl_evt + forwards["forwards"]
+all_fwds = exmpl_evt.to_dict('records') + forwards["forwards"]
 
 dff = pandas.DataFrame(all_fwds)
 dff["received_time"] = pandas.to_datetime(dff["received_time"], unit = 's')
 dff["resolved_time"] = pandas.to_datetime(dff["resolved_time"], unit = 's')
 
-dff.drop(0).to_gbq("lightning-fee-optimizer.version_1.forwardings",if_exists='append')
+dff.drop([0,1]).to_gbq("lightning-fee-optimizer.version_1.forwardings",if_exists='append')
 
 
 
