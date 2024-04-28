@@ -15,6 +15,7 @@ nodes = client.query(sql).to_dataframe()
 DG = nx.from_pandas_edgelist(channels[channels.active],"source","destination",edge_attr=True, create_using=nx.MultiDiGraph())
 
 tx_types = [("common",80000), ("micro",200), ("macro",4000000)]
+epsilon = 1
 
 for tx_type,tx_sat in tx_types:
     #tx_sat = 4000000 #macro ~1000
@@ -23,7 +24,7 @@ for tx_type,tx_sat in tx_types:
     for source, dest, key, data in DG.out_edges(keys=True,data=True):
         a = DG[source][dest][key]['base_fee_millisatoshi']
         b = DG[source][dest][key]['fee_per_millionth']/1000000
-        DG[source][dest][key]['fee'] = math.floor(a + tx_sat*b*1000) * 1000 + 1
+        DG[source][dest][key]['fee'] = math.floor(a + tx_sat*b*1000) * 1000 + epsilon
     
     sufficient_edges = (
         (source,dest,data)
