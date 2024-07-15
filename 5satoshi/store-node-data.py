@@ -24,7 +24,7 @@ else:
     del_query = """DELETE 
         FROM `lightning-fee-optimizer.version_1.forwardings` 
         WHERE created_index >= """
-    del_result = client.query(del_query + index_start)
+    del_result = client.query(del_query + str(index_start))
 
 ### Forwardings --------------------------------------------
 
