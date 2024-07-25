@@ -18,8 +18,8 @@ def update_fees(rpcpath,test=False,update_all = False):
             if row["channels"][0]["state"]=="CHANNELD_NORMAL":
                 channel_id = row["channels"][0]["channel_id"]
                 
-                msat_to_us = row["channels"][0]["to_us_msat"].millisatoshis
-                msat_total = row["channels"][0]["total_msat"].millisatoshis
+                msat_to_us = row["channels"][0]["to_us_msat"]
+                msat_total = row["channels"][0]["total_msat"]
                 
                 balance = (msat_to_us+1)/msat_total
                 new_fee = pow(math.floor(1/balance),2)
@@ -28,7 +28,7 @@ def update_fees(rpcpath,test=False,update_all = False):
                 base_fee = 0
                 
                 ppm = row["channels"][0]["fee_proportional_millionths"]
-                htlc_max = int(Millisatoshi(row["channels"][0]["maximum_htlc_out_msat"]))
+                htlc_max = row["channels"][0]["maximum_htlc_out_msat"]
                 new_htlc_max = int(msat_to_us - random.random() * 0.1 * msat_total)
                 if new_htlc_max < 0:
                     new_htlc_max = msat_to_us
