@@ -26,10 +26,10 @@ def get_recent_closures(rpc, limit=5):
     
     for peer in peers:
         for channel in peer.get('channels', []):
-            if channel.get('state', '').endswith('CLOSED'):
+            state = channel.get('state', '')
+            if state != 'CHANNELD_NORMAL':
                 info = parse_close_info(channel)
-                if info:
-                    closures.append(info)
+                closures.append(info)
     
     # Sort by closure time (descending)
     closures.sort(key=lambda x: x.get('closed_at', 0), reverse=True)
