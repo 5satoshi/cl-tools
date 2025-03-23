@@ -3,7 +3,7 @@ from datetime import datetime
 import os
 
 # Path to lightning-rpc socket (adjust if needed)
-RPC_PATH = os.path.expanduser("~/.lightning/lightning-rpc")
+RPC_PATH = os.path.expanduser(os.environ['HOME']+"/.lightning/bitcoin/lightning-rpc")
 
 def parse_close_info(channel):
     close_info = channel.get('close_info')
