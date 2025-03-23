@@ -2,8 +2,8 @@ from pyln.client import LightningRpc
 from datetime import datetime
 import os
 
-# Adjust this path if your lightning-rpc socket is somewhere else
-RPC_PATH = os.path.expanduser(os.environ['HOME']+"/.lightning/bitcoin/lightning-rpc")
+# Path to lightning-rpc socket (adjust if needed)
+RPC_PATH = os.path.expanduser("~/.lightning/lightning-rpc")
 
 def parse_close_info(channel):
     close_info = channel.get('close_info')
@@ -11,7 +11,7 @@ def parse_close_info(channel):
         closed_at = close_info.get('closed_at')
         closed_at_str = datetime.utcfromtimestamp(closed_at).strftime('%Y-%m-%d %H:%M:%S') if closed_at else "unknown"
         return {
-            'channel_id': channel.get('channel_id'),
+            'short_channel_id': channel.get('channel', 'unknown'),
             'state': channel.get('state'),
             'closer': close_info.get('closer', 'unknown'),
             'reason': close_info.get('reason', 'unknown'),
@@ -32,7 +32,7 @@ def get_recent_closures(rpc, limit=5):
                     closures.append(info)
 
     # Sort by closure time (descending)
-    closures.sort(key=lambda x: x['closed_at'], reverse=True)
+    closures.sort(key=lambda x: x.get('closed_at', 0), reverse=True)
 
     return closures[:limit]
 
@@ -42,11 +42,11 @@ def main():
 
     print("\nMost Recent Channel Closures:\n")
     for c in closures:
-        print(f"Channel ID : {c['channel_id']}")
-        print(f"Closed At  : {c['closed_at_str']}")
-        print(f"State      : {c['state']}")
-        print(f"Closer     : {c['closer']}")
-        print(f"Reason     : {c['reason']}\n")
+        print(f"Short Channel ID : {c['short_channel_id']}")
+        print(f"Closed At        : {c['closed_at_str']}")
+        print(f"State            : {c['state']}")
+        print(f"Closer           : {c['closer']}")
+        print(f"Reason           : {c['reason']}\n")
 
 if __name__ == "__main__":
     main()
