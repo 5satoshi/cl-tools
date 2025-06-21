@@ -58,22 +58,23 @@ for tx_type,tx_sat in tx_types:
     nodescores.to_gbq("lightning-fee-optimizer.version_1.betweenness",if_exists='append')
     
     ##### Edges
-    
-    start = pd.Timestamp.now()
-    
-    #betweenness = nx.betweenness_centrality(newDG,normalized=True,weight='fee')
-    edge_betweenness = nx.edge_betweenness_centrality(newDG,normalized=True,weight='fee')
-    
-    stop = pd.Timestamp.now()
-    
-    print('Time: ', stop - start) 
-    
-    edgescores = pd.DataFrame([(k[0],k[1],k[2],v) for k,v in edge_betweenness.items()], columns=['source','destination', 'key', 'shortest_path_share'])
-    
-    edgescores = pd.merge(edgescores, channels[channels.active], how="left", on=['source','destination'])
-    edgescores['rank'] = edgescores['shortest_path_share'].rank(method='min',ascending=False)
-    
-    edgescores["timestamp"] = max(channels["last_update"])
-    edgescores["type"] = tx_type
-    
-    edgescores.to_gbq("lightning-fee-optimizer.version_1.edge_betweenness",if_exists='replace')
+    if tx_type=="common":
+        
+        start = pd.Timestamp.now()
+        
+        #betweenness = nx.betweenness_centrality(newDG,normalized=True,weight='fee')
+        edge_betweenness = nx.edge_betweenness_centrality(newDG,normalized=True,weight='fee')
+        
+        stop = pd.Timestamp.now()
+        
+        print('Time: ', stop - start) 
+        
+        edgescores = pd.DataFrame([(k[0],k[1],k[2],v) for k,v in edge_betweenness.items()], columns=['source','destination', 'key', 'shortest_path_share'])
+        
+        edgescores = pd.merge(edgescores, channels[channels.active], how="left", on=['source','destination'])
+        edgescores['rank'] = edgescores['shortest_path_share'].rank(method='min',ascending=False)
+        
+        edgescores["timestamp"] = max(channels["last_update"])
+        edgescores["type"] = tx_type
+        
+        edgescores.to_gbq("lightning-fee-optimizer.version_1.edge_betweenness",if_exists='replace')
