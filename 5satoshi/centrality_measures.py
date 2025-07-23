@@ -40,8 +40,8 @@ for tx_type,tx_sat in tx_types:
     
     start = pd.Timestamp.now()
     
-    #betweenness = nx.betweenness_centrality(newDG,normalized=True,weight='fee')
-    betweenness = nx.edge_betweenness_centrality(newDG,normalized=True,weight='fee')
+    betweenness = nx.betweenness_centrality(newDG,normalized=True,weight='fee')
+    #betweenness = nx.edge_betweenness_centrality(newDG,normalized=True,weight='fee')
     
     stop = pd.Timestamp.now()
     
