@@ -193,15 +193,23 @@ def get_test_subgraph(g_filtered, logger, k_hops=2, max_vertices=200):
     )
     return sub_g
 
+# -----------------------------
+# Betweenness
+# -----------------------------
+
+@log_time
+def compute_betweenness(g_sub, tx_type, logger):
+    logger.info(f"[{tx_type}] Computing betweenness (nodes + edges)")
+    v_betw, e_betw = betweenness(g_sub, weight=g_sub.ep['fee'])
+    logger.info(f"[{tx_type}] Betweenness computation finished")
+    return v_betw, e_betw
 
 # -----------------------------
 # Node betweenness
 # -----------------------------
-@log_time
-def compute_node_betweenness(g_sub, tx_type, nodes_df, latest_update, vertex_to_id, logger):
+def process_node_betweenness(g_sub, v_betw, tx_type, nodes_df, latest_update, vertex_to_id, logger):
     try:
         logger.info(f"[{tx_type}] Computing node betweenness")
-        v_betw, _ = betweenness(g_sub, weight=g_sub.ep['fee'])
         df = pd.DataFrame({
             'nodeid': [vertex_to_id[v] for v in g_sub.vertices()],
             'shortest_path_share': list(v_betw)
@@ -219,11 +227,9 @@ def compute_node_betweenness(g_sub, tx_type, nodes_df, latest_update, vertex_to_
 # -----------------------------
 # Edge betweenness
 # -----------------------------
-@log_time
-def compute_edge_betweenness(g_sub, tx_type, latest_update, vertex_to_id, channels, logger):
+def process_edge_betweenness(g_sub, e_betw, tx_type, latest_update, vertex_to_id, channels, logger):
     try:
         logger.info(f"[{tx_type}] Computing edge betweenness")
-        _, e_betw = betweenness(g_sub, weight=g_sub.ep['fee'])
         data = [(vertex_to_id[e.source()], vertex_to_id[e.target()], e_betw[e]) for e in g_sub.edges()]
         df = pd.DataFrame(data, columns=['source', 'destination', 'shortest_path_share'])
         df = pd.merge(df, channels[channels.active], on=['source', 'destination'], how='left')
