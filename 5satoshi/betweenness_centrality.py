@@ -9,6 +9,7 @@ from graph_tool.all import Graph, GraphView, betweenness
 from graph_tool.search import bfs_search, BFSVisitor
 from graph_tool.topology import label_components
 import os
+import argparse
 
 # -----------------------------
 # Graph-tool threads setup
@@ -247,6 +248,7 @@ def process_edge_betweenness(g_sub, e_betw, tx_type, latest_update, vertex_to_id
 # -----------------------------
 def run_pipeline(TEST_MODE=True, logger=logger):
     logger.info("Starting Lightning fee centrality computation")
+    logger.info(f"TEST_MODE = {TEST_MODE}")
 
     channels, nodes, latest_update = load_data(logger)
     g, vertex_to_id, edge_lookup = build_graph(channels, nodes, logger)
@@ -300,5 +302,17 @@ def run_pipeline(TEST_MODE=True, logger=logger):
 # Main guard
 # -----------------------------
 if __name__ == "__main__":
-    run_pipeline(TEST_MODE=True)
+    parser = argparse.ArgumentParser(
+        description="Lightning Network Betweenness Centrality Pipeline"
+    )
+
+    parser.add_argument(
+        "--test",
+        action="store_true",
+        help="Run in TEST_MODE (BFS subgraph, no BigQuery writes)"
+    )
+
+    args = parser.parse_args()
+
+    run_pipeline(TEST_MODE=args.test)
 
