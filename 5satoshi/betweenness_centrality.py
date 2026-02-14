@@ -262,9 +262,12 @@ def run_pipeline(TEST_MODE=True, logger=logger):
                 g_sub = get_test_subgraph(g_sub, logger, k_hops=3, max_vertices=200)
             
             logger.info(f"[{tx_type}] Largest SCC: {g_sub.num_vertices()} nodes, {g_sub.num_edges()} edges")
+            
+            # Compute once
+            v_betw, e_betw = compute_betweenness(g_sub, tx_type, logger)
 
             # Node betweenness
-            nodescores = compute_node_betweenness(g_sub, tx_type, nodes, latest_update, vertex_to_id, logger)
+            nodescores = process_node_betweenness(g_sub, v_betw, tx_type, nodes, latest_update, vertex_to_id, logger)
             if not nodescores.empty and not TEST_MODE:
                 nodescores.to_gbq(
                     "lightning-fee-optimizer.version_1.betweenness",
@@ -273,7 +276,7 @@ def run_pipeline(TEST_MODE=True, logger=logger):
                 logger.info(f"[{tx_type}] Node betweenness written to BigQuery")
 
             # Edge betweenness for all tx_types, append to BigQuery
-            edgescores = compute_edge_betweenness(g_sub, tx_type, latest_update, vertex_to_id, channels, logger)
+            edgescores = process_edge_betweenness(g_sub, e_betw, tx_type, latest_update, vertex_to_id, channels, logger)
             if not edgescores.empty and not TEST_MODE:
                 edgescores.to_gbq(
                     "lightning-fee-optimizer.version_1.edge_betweenness",
