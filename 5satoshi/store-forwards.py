@@ -54,48 +54,15 @@ def main():
     # -------------------------------------------------
     try:
         logger.info("Querying existing forwardings status from BigQuery...")
-
-        status_query = """
-            SELECT status,
-                   min(received_time) as mintime,
-                   max(received_time) as maxtime,
-                   min(created_index) as minindex,
-                   max(created_index) as maxindex
+        
+        # Fetch max indexes from BigQuery
+        result = client.query("""
+            SELECT MAX(updated_index) AS max_updated
             FROM `lightning-fee-optimizer.version_1.forwardings`
-            GROUP BY status
-        """
-        status_result = client.query(status_query).to_dataframe()
-        logger.info(f"Status query returned {len(status_result)} rows.")
-
-        # Log max created_index per status
-        if not status_result.empty:
-            for _, row in status_result.iterrows():
-                status = row['status']
-                max_idx = row['maxindex']
-                logger.info(f"Status '{status}': max created_index = {max_idx}")
-        else:
-            logger.info("No existing forwardings found in BigQuery.")
-
-        offered_minindex = status_result.minindex[
-            status_result.status == 'offered'
-        ]
-
-        if offered_minindex.empty:
-            index_start = status_result.maxindex.max() + 1
-            logger.info(f"No 'offered' records found. Starting from index {index_start}")
-        else:
-            index_start = offered_minindex.iloc[0]
-            logger.info(f"Found unfinished 'offered' record. Re-syncing from index {index_start}")
-
-            if not DRY_RUN:
-                del_query = """
-                    DELETE FROM `lightning-fee-optimizer.version_1.forwardings`
-                    WHERE created_index >= {}
-                """.format(index_start)
-                client.query(del_query).result()
-                logger.info("Deleted overlapping forwardings from BigQuery.")
-            else:
-                logger.info("DRY RUN: Skipping DELETE query.")
+        """).to_dataframe()
+        max_updated = result["max_updated"].iloc[0]
+        if pd.isna(max_updated):
+            max_updated = 0
 
     except Exception:
         logger.exception("Failed during BigQuery status check.")
@@ -105,9 +72,9 @@ def main():
     # Fetch Forwardings from Lightning
     # -------------------------------------------------
     try:
-        logger.info(f"Fetching forwards from Lightning starting at index {index_start}...")
-
-        forwards = l1.listforwards(index='created', start=int(index_start))
+        start_index = int(max_updated) + 1
+        logger.info(f"Fetching forwards from Lightning starting at updated_index {start_index}...")
+        forwards = l1.listforwards(index='updated', start=start_index)
         dff = pd.DataFrame(forwards["forwards"])
         logger.info(f"Fetched {len(dff)} forward records.")
 
@@ -139,18 +106,18 @@ def main():
 
         dff = dff[expected_columns]
 
-        # Integer columns (nullable)
-        dff["created_index"] = dff["created_index"].astype("Int64")
-        dff["in_msat"] = dff["in_msat"].astype("Int64")
+        # Float columns (nullable)
+        dff["out_msat"] = dff["out_msat"].astype("Float64")
+        dff["fee_msat"] = dff["fee_msat"].astype("Float64")
 
-        # Float columns
-        float_cols = [
-            "out_msat", "fee_msat",
+        # Int columns
+        int_cols = [
             "in_htlc_id", "failcode",
-            "out_htlc_id", "updated_index"
+            "out_htlc_id", "updated_index",
+            "in_msat","created_index"
         ]
-        for col in float_cols:
-            dff[col] = dff[col].astype("float64")
+        for col in int_cols:
+            dff[col] = dff[col].astype("Int64")
 
         # String columns
         string_cols = [
@@ -199,12 +166,12 @@ def main():
 
             job_config = bigquery.LoadJobConfig(
                 schema=schema,
-                write_disposition="WRITE_APPEND"
+                write_disposition="WRITE_TRUNCATE"
             )
 
             job = client.load_table_from_dataframe(
                 dff,
-                "lightning-fee-optimizer.version_1.forwardings",
+                "lightning-fee-optimizer.version_1.temp_forwardings",
                 job_config=job_config
             )
             job.result()
@@ -216,6 +183,42 @@ def main():
 
     logger.info("Forwardings sync completed successfully.")
 
+    # -------------------------------------------------
+    # Merge data
+    # -------------------------------------------------
+    try:
+        if DRY_RUN:
+            logger.info(f"DRY RUN: Skipping merge in BigQuery.")
+        else:
+            logger.info("Running MERGE into forwardings table...")
+            
+            # Fetch max indexes from BigQuery
+            job = client.query("""
+                MERGE `lightning-fee-optimizer.version_1.forwardings` T
+                USING `lightning-fee-optimizer.version_1.temp_forwardings` S
+                ON T.created_index = S.created_index
+                WHEN MATCHED AND S.updated_index > T.updated_index THEN
+                UPDATE SET
+                    in_channel = S.in_channel,
+                    out_channel = S.out_channel,
+                    in_msat = S.in_msat,
+                    out_msat = S.out_msat,
+                    fee_msat = S.fee_msat,
+                    status = S.status,
+                    received_time = S.received_time,
+                    resolved_time = S.resolved_time,
+                    failcode = S.failcode,
+                    failreason = S.failreason,
+                    style = S.style,
+                    updated_index = S.updated_index
+                WHEN NOT MATCHED THEN
+                INSERT ROW;
+            """)
+            job.result()
+
+    except Exception:
+        logger.exception("Failed during BigQuery merge")
+        sys.exit(1)
 
 # -------------------------------------------------
 # Main Guard
