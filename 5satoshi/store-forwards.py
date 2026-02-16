@@ -160,21 +160,9 @@ def main():
         for col in string_cols:
             dff[col] = dff[col].astype("string")
 
-
-        # -------------------------
-        # Safe Timestamp Conversion (ns -> us)
-        # -------------------------
-        for col in ["received_time", "resolved_time"]:
-            # Convert to datetime (if not already)
-            dff[col] = pd.to_datetime(dff[col], errors="coerce", utc=True)
-            # Convert nanoseconds to microseconds safely
-            dff[col] = dff[col].apply(lambda x: int(x.value // 1000) if pd.notnull(x) else pd.NaT)
-            # Back to datetime (microseconds, UTC)
-            dff[col] = pd.to_datetime(dff[col], unit='us', utc=True)
-
         # Timestamp conversion
-        #dff["received_time"] = pd.to_datetime(dff["received_time"], unit="s", errors="coerce", utc="True")
-        #dff["resolved_time"] = pd.to_datetime(dff["resolved_time"], unit="s", errors="coerce", utc="True")
+        dff["received_time"] = pd.to_datetime(dff["received_time"], unit="s", errors="coerce", utc=True).dt.round("us")
+        dff["resolved_time"] = pd.to_datetime(dff["resolved_time"], unit="s", errors="coerce", utc=True).dt.round("us")
 
         logger.info("Schema enforcement complete.")
 
