@@ -99,7 +99,7 @@ def run_sbm_and_draw(g, output_file="sbm_graph.pdf"):
         output=output_file,
         output_size=(2000, 2000),
         vertex_size=gt.prop_to_size(v_weight, 2, 15, power=1, log=True),
-        vertex_fill_color=state.get_b(), # Color nodes by their SBM block/community
+        vertex_fill_color=state.get_bs()[0], # Color nodes by their bottom-level SBM block/community
         edge_color=gt.prop_to_size(
             g.ep.weight,
             power=1,
