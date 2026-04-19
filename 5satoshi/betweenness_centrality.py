@@ -4,6 +4,7 @@ import logging
 import random
 import time
 import pandas as pd
+from pandas_gbq import to_gbq
 from google.cloud import bigquery
 from graph_tool.all import Graph, GraphView, betweenness
 from graph_tool.search import bfs_search, BFSVisitor
@@ -277,7 +278,8 @@ def run_pipeline(TEST_MODE=True, logger=logger):
             # Node betweenness
             nodescores = process_node_betweenness(g_sub, v_betw, tx_type, nodes, latest_update, vertex_to_id, logger)
             if not nodescores.empty and not TEST_MODE:
-                nodescores.to_gbq(
+                to_gbq(
+                    nodescores,
                     "lightning-fee-optimizer.version_1.betweenness",
                     if_exists='append'
                 )
@@ -286,7 +288,8 @@ def run_pipeline(TEST_MODE=True, logger=logger):
             # Edge betweenness for all tx_types, append to BigQuery
             edgescores = process_edge_betweenness(g_sub, e_betw, tx_type, latest_update, vertex_to_id, channels, logger)
             if not edgescores.empty and not TEST_MODE:
-                edgescores.to_gbq(
+                to_gbq(
+                    edgescores,
                     "lightning-fee-optimizer.version_1.edge_betweenness",
                     if_exists='append'
                 )
