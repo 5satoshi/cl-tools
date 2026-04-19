@@ -40,6 +40,23 @@ def load_edge_betweenness(tx_type='common', date=None):
     return df
 
 # -----------------------------
+# Load node aliases from BigQuery
+# -----------------------------
+def load_node_aliases():
+    client = bigquery.Client()
+    logger.info("Loading node aliases from BigQuery...")
+    query = """
+    SELECT nodeid, alias
+    FROM `lightning-fee-optimizer.version_1.nodes`
+    """
+    try:
+        df = client.query(query).to_dataframe()
+        return dict(zip(df['nodeid'], df['alias'].fillna('Unknown')))
+    except Exception as e:
+        logger.warning(f"Could not load aliases: {e}")
+        return {}
+
+# -----------------------------
 # Build directed graph
 # -----------------------------
 def build_directed_graph(df):
@@ -85,7 +102,7 @@ def print_community_summary(state):
 # -----------------------------
 # Run nested SBM and draw to PNG
 # -----------------------------
-def run_sbm_and_draw(g, vertex_to_id, output_file="sbm_graph.pdf"):
+def run_sbm_and_draw(g, vertex_to_id, node_aliases, output_file="sbm_graph.pdf"):
     logger.info("Running nested SBM inference...")
     gt.seed_rng(47)
 
@@ -104,7 +121,8 @@ def run_sbm_and_draw(g, vertex_to_id, output_file="sbm_graph.pdf"):
     node_scores.sort(key=lambda x: x[1], reverse=True)
     logger.info("Top 10 most important nodes (by total shortest path share):")
     for i, (node_id, score) in enumerate(node_scores[:10]):
-        logger.info(f"  {i+1}. {node_id}: {score:.4f}")
+        alias = node_aliases.get(node_id, "Unknown")
+        logger.info(f"  {i+1}. {node_id} ({alias}): {score:.4f}")
 
     state.draw(
         output=output_file,
@@ -143,7 +161,8 @@ if __name__ == "__main__":
 
     # Load data and build graph
     df_edges = load_edge_betweenness(tx_type=args.type, date=args.date)
+    node_aliases = load_node_aliases()
     g, node_map, vertex_to_id = build_directed_graph(df_edges)
 
     # Run SBM and save PNG
-    run_sbm_and_draw(g, vertex_to_id, output_file=args.output)
+    run_sbm_and_draw(g, vertex_to_id, node_aliases, output_file=args.output)
