@@ -91,10 +91,15 @@ def run_sbm_and_draw(g, output_file="sbm_graph.pdf"):
     print_community_summary(state)
 
     logger.info(f"Drawing graph to: {output_file}")
+    
+    # Calculate weighted degree (sum of edge betweenness) for each vertex to use as node size
+    v_weight = g.degree_property_map("total", weight=g.ep.weight)
+    
     state.draw(
-        #level=1,
-        output=output_file,  # Save to PNG
-        #output_size=(3000, 3000),  # BIG image
+        output=output_file,
+        output_size=(2000, 2000),
+        vertex_size=gt.prop_to_size(v_weight, 2, 15, power=1, log=True),
+        vertex_fill_color=state.get_b(), # Color nodes by their SBM block/community
         edge_color=gt.prop_to_size(
             g.ep.weight,
             power=1,
@@ -104,7 +109,7 @@ def run_sbm_and_draw(g, output_file="sbm_graph.pdf"):
         eorder=g.ep.weight,
         edge_pen_width=gt.prop_to_size(
             g.ep.weight,
-            1, 4,
+            0.5, 6,
             power=1,
             log=True
         ),
