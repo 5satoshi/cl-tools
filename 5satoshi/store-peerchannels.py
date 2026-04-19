@@ -1,5 +1,6 @@
 from pyln.client import LightningRpc, Millisatoshi
 import pandas
+import pandas_gbq
 import math, time
 import sys, os, logging
 import random
@@ -19,6 +20,6 @@ dfp['msatoshi_total'] = dfp['total_msat']
 dfp['id'] = dfp['peer_id']
 
 dfp = dfp.select_dtypes(include=['int64', 'float64', 'object', 'bool', 'datetime64[ns]'])
-dfp.to_gbq("lightning-fee-optimizer.version_1.peers",if_exists='replace')
+pandas_gbq.to_gbq(dfp, "lightning-fee-optimizer.version_1.peers", if_exists='replace')
 
 
