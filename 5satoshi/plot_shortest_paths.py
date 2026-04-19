@@ -4,6 +4,10 @@ import logging
 import pandas as pd
 from datetime import datetime, timedelta, timezone
 from google.cloud import bigquery
+
+import warnings
+warnings.filterwarnings("ignore", message="Error importing Gtk module")
+
 import graph_tool.all as gt
 import matplotlib.cm
 
