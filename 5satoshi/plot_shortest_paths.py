@@ -2,7 +2,7 @@
 
 import logging
 import pandas as pd
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from google.cloud import bigquery
 import graph_tool.all as gt
 import matplotlib.cm
@@ -22,7 +22,7 @@ logger = logging.getLogger("EdgeBetweennessSBM")
 def load_edge_betweenness(tx_type='common', date=None):
     client = bigquery.Client()
     if date is None:
-        date = (datetime.utcnow() - timedelta(days=1)).date()  # default yesterday
+        date = (datetime.now(timezone.utc) - timedelta(days=1)).date()  # default yesterday
     logger.info(f"Loading '{tx_type}' edge betweenness for date: {date}")
 
     query = f"""
