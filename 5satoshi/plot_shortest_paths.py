@@ -117,12 +117,17 @@ def run_sbm_and_draw(g, vertex_to_id, node_aliases, output_file="sbm_graph.pdf")
     v_weight = g.degree_property_map("total", weight=g.ep.weight)
     
     # Identify and log the most important nodes
-    node_scores = [(vertex_to_id[v], v_weight[v]) for v in g.vertices()]
+    node_scores = [(vertex_to_id[v], v_weight[v], v) for v in g.vertices()]
     node_scores.sort(key=lambda x: x[1], reverse=True)
     logger.info("Top 10 most important nodes (by total shortest path share):")
-    for i, (node_id, score) in enumerate(node_scores[:10]):
+    
+    # Get base-level block assignments
+    b = state.get_bs()[0]
+    
+    for i, (node_id, score, v) in enumerate(node_scores[:10]):
         alias = node_aliases.get(node_id, "Unknown")
-        logger.info(f"  {i+1}. {node_id} ({alias}): {score:.4f}")
+        block_id = b[v]
+        logger.info(f"  {i+1}. {node_id} ({alias}): {score:.4f} (Cluster: {block_id})")
 
     state.draw(
         output=output_file,
