@@ -85,7 +85,7 @@ def print_community_summary(state):
 # -----------------------------
 # Run nested SBM and draw to PNG
 # -----------------------------
-def run_sbm_and_draw(g, output_file="sbm_graph.pdf"):
+def run_sbm_and_draw(g, vertex_to_id, output_file="sbm_graph.pdf"):
     logger.info("Running nested SBM inference...")
     gt.seed_rng(47)
 
@@ -99,6 +99,13 @@ def run_sbm_and_draw(g, output_file="sbm_graph.pdf"):
     # Calculate weighted degree (sum of edge betweenness) for each vertex to use as node size
     v_weight = g.degree_property_map("total", weight=g.ep.weight)
     
+    # Identify and log the most important nodes
+    node_scores = [(vertex_to_id[v], v_weight[v]) for v in g.vertices()]
+    node_scores.sort(key=lambda x: x[1], reverse=True)
+    logger.info("Top 10 most important nodes (by total shortest path share):")
+    for i, (node_id, score) in enumerate(node_scores[:10]):
+        logger.info(f"  {i+1}. {node_id}: {score:.4f}")
+
     state.draw(
         output=output_file,
         output_size=(2000, 2000),
@@ -139,4 +146,4 @@ if __name__ == "__main__":
     g, node_map, vertex_to_id = build_directed_graph(df_edges)
 
     # Run SBM and save PNG
-    run_sbm_and_draw(g, output_file=args.output)
+    run_sbm_and_draw(g, vertex_to_id, output_file=args.output)
