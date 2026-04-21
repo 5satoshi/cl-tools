@@ -1,4 +1,5 @@
 import os
+import numpy as np
 from pyln.client import LightningRpc
 import pandas as pd
 from graph_tool.all import Graph, vertex_average, global_clustering, edge_reciprocity
@@ -54,6 +55,9 @@ print("Calculating connected components...")
 comp_scc, hist_scc = label_components(g, directed=True)
 largest_scc_size = hist_scc.max() if len(hist_scc) > 0 else 0
 scc_fraction = (largest_scc_size / g.num_vertices()) * 100 if g.num_vertices() > 0 else 0
+total_sccs = len(hist_scc)
+mean_scc_size = hist_scc.mean() if total_sccs > 0 else 0
+median_scc_size = np.median(hist_scc) if total_sccs > 0 else 0
 
 report_content = f"""# Lightning Network Topology Report
 
@@ -81,9 +85,11 @@ report_content = f"""# Lightning Network Topology Report
 
 ## 5. Connected Components
 - **Largest Strongly Connected Component (SCC):** {largest_scc_size} nodes ({scc_fraction:.2f}% of total network)
-- **Total SCCs:** {len(hist_scc)}
+- **Total SCCs:** {total_sccs}
+- **Mean SCC Size:** {mean_scc_size:.2f} nodes
+- **Median SCC Size:** {median_scc_size:.2f} nodes
 
-**Interpretation:** The Largest Strongly Connected Component represents the core of the network where every node can route a payment to any other node in the core (and vice versa) along directed channels. A high percentage indicates a healthy, unfragmented network capable of reliable routing.
+**Interpretation:** The Largest Strongly Connected Component represents the core of the network where every node can route a payment to any other node in the core (and vice versa) along directed channels. A high percentage indicates a healthy, unfragmented network capable of reliable routing. The median and mean SCC sizes reflect the distribution of nodes outside this core, which usually exist as isolated single nodes or small fragmented components.
 """
 
 report_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "network_report.md")
