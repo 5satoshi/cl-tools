@@ -53,7 +53,9 @@ recip = edge_reciprocity(g)
 # 4. Connected Components
 print("Calculating connected components...")
 comp_scc, hist_scc = label_components(g, directed=True)
-largest_scc_size = hist_scc.max() if len(hist_scc) > 0 else 0
+sorted_hist_scc = np.sort(hist_scc)
+largest_scc_size = sorted_hist_scc[-1] if len(sorted_hist_scc) > 0 else 0
+second_largest_scc_size = sorted_hist_scc[-2] if len(sorted_hist_scc) > 1 else 0
 scc_fraction = (largest_scc_size / g.num_vertices()) * 100 if g.num_vertices() > 0 else 0
 total_sccs = len(hist_scc)
 mean_scc_size = hist_scc.mean() if total_sccs > 0 else 0
@@ -85,6 +87,7 @@ report_content = f"""# Lightning Network Topology Report
 
 ## 5. Connected Components
 - **Largest Strongly Connected Component (SCC):** {largest_scc_size} nodes ({scc_fraction:.2f}% of total network)
+- **Second Largest SCC:** {second_largest_scc_size} nodes
 - **Total SCCs:** {total_sccs}
 - **Mean SCC Size:** {mean_scc_size:.2f} nodes
 - **Median SCC Size:** {median_scc_size:.2f} nodes
