@@ -1,9 +1,10 @@
+import os
 from pyln.client import LightningRpc
 import pandas as pd
 from graph_tool.all import Graph, vertex_average, pseudo_diameter, global_clustering, edge_reciprocity
 
 # Initialize RPC
-l1 = LightningRpc(".lightning/bitcoin/lightning-rpc")
+l1 = LightningRpc(os.environ['HOME'] + "/.lightning/bitcoin/lightning-rpc")
 info = l1.getinfo()
 
 print("Fetching channels...")
