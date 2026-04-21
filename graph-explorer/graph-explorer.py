@@ -1,7 +1,8 @@
 import os
 from pyln.client import LightningRpc
 import pandas as pd
-from graph_tool.all import Graph, vertex_average, pseudo_diameter, global_clustering, edge_reciprocity
+from graph_tool.all import Graph, vertex_average, global_clustering, edge_reciprocity
+from graph_tool.topology import label_components
 
 # Initialize RPC
 l1 = LightningRpc(os.environ['HOME'] + "/.lightning/bitcoin/lightning-rpc")
@@ -48,9 +49,11 @@ g_clust, _ = global_clustering(g)
 # 3. Edge Reciprocity
 recip = edge_reciprocity(g)
 
-# 4. Pseudo-diameter (Approximation of the longest shortest path)
-print("Calculating pseudo-diameter...")
-pdiam, _ = pseudo_diameter(g)
+# 4. Connected Components
+print("Calculating connected components...")
+comp_scc, hist_scc = label_components(g, directed=True)
+largest_scc_size = hist_scc.max() if len(hist_scc) > 0 else 0
+scc_fraction = (largest_scc_size / g.num_vertices()) * 100 if g.num_vertices() > 0 else 0
 
 report_content = f"""# Lightning Network Topology Report
 
@@ -76,10 +79,11 @@ report_content = f"""# Lightning Network Topology Report
 
 **Interpretation:** This is the fraction of edges that are mutual. A high value (e.g., > 0.90) is expected in Lightning because channels are inherently bidirectional. Non-reciprocal edges usually occur when a channel's policy is updated, broken, or disabled in only one direction.
 
-## 5. Distance
-- **Pseudo-diameter:** {pdiam}
+## 5. Connected Components
+- **Largest Strongly Connected Component (SCC):** {largest_scc_size} nodes ({scc_fraction:.2f}% of total network)
+- **Total SCCs:** {len(hist_scc)}
 
-**Interpretation:** This represents the longest shortest-path across the network (the maximum number of hops between any two nodes). A low diameter confirms the "small world" nature of the Lightning Network, meaning payments can be routed between almost any two nodes in just a few hops.
+**Interpretation:** The Largest Strongly Connected Component represents the core of the network where every node can route a payment to any other node in the core (and vice versa) along directed channels. A high percentage indicates a healthy, unfragmented network capable of reliable routing.
 """
 
 report_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "network_report.md")
