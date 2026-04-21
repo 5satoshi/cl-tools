@@ -4,4 +4,4 @@ This directory contains tools designed to interact with and explore the Lightnin
 
 ## Scripts
 
-- **`graph-explorer.py`**: A script used to traverse, analyze, or potentially visualize the nodes, channels, and edges that make up the public Lightning Network graph.
+- **`graph-explorer.py`**: A script that connects to Core Lightning, builds a directed graph using `graph-tool`, and calculates key network topology metrics (Average Degree, Global Clustering, Edge Reciprocity, and Strongly Connected Components). It automatically generates a detailed `network_report.md` file with the results and their interpretations.
