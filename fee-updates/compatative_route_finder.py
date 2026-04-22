@@ -208,7 +208,7 @@ def run_route_finding(number_of_runs, mynode):
             channel_info = channels.get(iv_id[curr])
             if channel_info:
                 channel = channel_info['short_id']
-                actual_fee = math.floor(channel_info['base_fee'] + tx_sat * (channel_info['fee_rate']/1000000.0) * 1000)
+                actual_ppm = channel_info['fee_rate']
                 
                 i_DG2 = gt.GraphView(ii_DG)
                 vfilt2 = i_DG2.new_vertex_property("bool", val=True)
@@ -220,23 +220,26 @@ def run_route_finding(number_of_runs, mynode):
                 logger.info(f"Distance A -> B (no mynode): {dist_AB_no_mynode}")
                 
                 if dist_AB_no_mynode < float('inf'):
-                    fee_diff = dist_AB_no_mynode - dist_AB
-                    logger.info(f"Found competitive route! Best fee (fee diff): {fee_diff} | Actual fee: {actual_fee}")
+                    max_fee = dist_AB_no_mynode - dist_AB
+                    # ppm = (fee_msat - base_fee) * 1000 / tx_sat
+                    best_ppm = math.floor((max_fee - channel_info['base_fee']) * 1000 / tx_sat)
+                    
+                    logger.info(f"Found competitive route! Best PPM: {best_ppm} | Actual PPM: {actual_ppm}")
                     found_competitive = True
-                    if channel not in best_fees or fee_diff > best_fees[channel]['best_fee']:
-                        best_fees[channel] = {'best_fee': fee_diff, 'actual_fee': actual_fee}
+                    if channel not in best_fees or best_ppm > best_fees[channel]['best_ppm']:
+                        best_fees[channel] = {'best_ppm': best_ppm, 'actual_ppm': actual_ppm}
                         
             if not found_competitive:
                 logger.info("No competitive route")
         else:
             logger.info("Mynode not on shortest path")
 
-    print("\n=== Best Fee vs Actual Fee per Channel ===")
+    print("\n=== Best PPM vs Actual PPM per Channel ===")
     if not best_fees:
         print("No competitive routes found across all runs.")
     else:
         for ch, data in sorted(best_fees.items()):
-            print(f"Channel {ch}: Best Fee = {data['best_fee']} | Actual Fee = {data['actual_fee']}")
+            print(f"Channel {ch}: Best PPM = {data['best_ppm']} | Actual PPM = {data['actual_ppm']}")
 
 
 if __name__ == "__main__":
