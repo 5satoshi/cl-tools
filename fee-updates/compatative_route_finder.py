@@ -101,7 +101,15 @@ def run_route_finding(number_of_runs, mynode):
     for i in range(number_of_runs):
         
         i_node_v = nodes[random.randint(0,len(nodes)-1)]
+        dest_node_v = nodes[random.randint(0,len(nodes)-1)]
+        
+        # Ensure we pick distinct A, B, and neither is mynode
+        while dest_node_v == i_node_v or dest_node_v == mynode_v or i_node_v == mynode_v:
+            i_node_v = nodes[random.randint(0,len(nodes)-1)]
+            dest_node_v = nodes[random.randint(0,len(nodes)-1)]
+            
         i_node = v_id[i_node_v]
+        dest_node = v_id[dest_node_v]
         
         tx_sat = random.randint(1,1000000)
         
@@ -109,6 +117,7 @@ def run_route_finding(number_of_runs, mynode):
         iv_id = i_DG.vertex_properties["id"]
         iv_mynode = gt.find_vertex(i_DG, iv_id, mynode)[0]
         i_i_node_v = gt.find_vertex(i_DG, iv_id, i_node)[0]
+        i_dest_node_v = gt.find_vertex(i_DG, iv_id, dest_node)[0]
         
         ie_base_fee = i_DG.edge_properties["base_fee_millisatoshi"]
         ie_fee_rate = i_DG.edge_properties["fee_per_millionth"]
@@ -120,7 +129,7 @@ def run_route_finding(number_of_runs, mynode):
             ie_fee_rate[e] = 0
         
         logger.info("---")
-        logger.info("TX amount: " + str(tx_sat))
+        logger.info(f"TX amount: {tx_sat} | A: {i_node[:8]} B: {dest_node[:8]}")
         
         e_fee = i_DG.new_edge_property("double")
         efilt = i_DG.new_edge_property("bool", val=True)
@@ -136,64 +145,61 @@ def run_route_finding(number_of_runs, mynode):
         
         i_DG.set_edge_filter(efilt)
         
-        found = False
-        destinations = []
-        
         comp, hist = gt.label_components(i_DG)
+        if comp[i_i_node_v] != comp[i_dest_node_v] or comp[i_i_node_v] != comp[iv_mynode]:
+            logger.info("Nodes not in same component")
+            continue
+            
         target_comp = comp[i_i_node_v]
         vfilt = i_DG.new_vertex_property("bool")
         vfilt.a = (comp.a == target_comp)
         
         ii_DG = gt.GraphView(i_DG, vfilt=vfilt)
         
-        dist, pred = gt.shortest_distance(ii_DG, source=i_i_node_v, weights=e_fee, pred_map=True)
+        dist_A, pred_A = gt.shortest_distance(ii_DG, source=i_i_node_v, weights=e_fee, pred_map=True)
         
         ii_mynode_list = gt.find_vertex(ii_DG, iv_id, mynode)
-        if ii_mynode_list:
-            ii_mynode = ii_mynode_list[0]
-            dist_from_mynode, pred_mynode = gt.shortest_distance(ii_DG, source=ii_mynode, weights=e_fee, pred_map=True)
+        if not ii_mynode_list:
+            continue
+        ii_mynode = ii_mynode_list[0]
+        ii_dest_node = gt.find_vertex(ii_DG, iv_id, dest_node)[0]
+        
+        dist_AB = dist_A[ii_dest_node]
+        if dist_AB == float('inf'):
+            logger.info("No route from A to B")
+            continue
             
-            for v in ii_DG.vertices():
-                if v != i_i_node_v and v != ii_mynode and dist[v] < float('inf'):
-                    # Check if mynode is on a shortest path
-                    if math.isclose(dist[v], dist[ii_mynode] + dist_from_mynode[v], rel_tol=1e-9):
-                        found = True
-                        
-                        # Peer is the predecessor to mynode from source
-                        peer_v = ii_DG.vertex(pred[ii_mynode])
-                        peer = iv_id[peer_v]
-                        
-                        # Channel is the first hop after mynode toward destination
-                        curr = v
-                        while pred_mynode[curr] != ii_mynode:
-                            curr = ii_DG.vertex(pred_mynode[curr])
-                        
-                        channel = channels.get(iv_id[curr])
-                        if channel:
-                            destinations.append((iv_id[v], peer, channel))
-            
-        if found:
-            i_DG2 = gt.GraphView(ii_DG)
-            vfilt2 = i_DG2.new_vertex_property("bool", val=True)
-            vfilt2[ii_mynode] = False
-            i_DG2.set_vertex_filter(vfilt2)
-            
-            comp_dist = gt.shortest_distance(i_DG2, source=i_i_node_v, weights=e_fee)
-            
-            comp_fees = {iv_id[v]: comp_dist[v] for v in i_DG2.vertices() if comp_dist[v] < float('inf')}
-            fees = {iv_id[v]: dist[v] for v in ii_DG.vertices()}
-            
+        dist_from_mynode, pred_mynode = gt.shortest_distance(ii_DG, source=ii_mynode, weights=e_fee, pred_map=True)
+        
+        # Check if mynode is on a shortest path
+        if math.isclose(dist_AB, dist_A[ii_mynode] + dist_from_mynode[ii_dest_node], rel_tol=1e-9):
             found_competitive = False
-            for to, peer, ch in destinations:
-                theirs = comp_fees.get(to)
-                if theirs is not None:
-                    fee = theirs - fees[to]
-                    found_competitive = True
-                    if ch not in best_fees or fee > best_fees[ch]:
-                        best_fees[ch] = fee
             
+            # Channel is the first hop after mynode toward destination
+            curr = ii_dest_node
+            while pred_mynode[curr] != ii_mynode:
+                curr = ii_DG.vertex(pred_mynode[curr])
+            
+            channel = channels.get(iv_id[curr])
+            if channel:
+                i_DG2 = gt.GraphView(ii_DG)
+                vfilt2 = i_DG2.new_vertex_property("bool", val=True)
+                vfilt2[ii_mynode] = False
+                i_DG2.set_vertex_filter(vfilt2)
+                
+                comp_dist = gt.shortest_distance(i_DG2, source=i_i_node_v, weights=e_fee)
+                dist_AB_no_mynode = comp_dist[ii_dest_node]
+                
+                if dist_AB_no_mynode < float('inf'):
+                    fee_diff = dist_AB_no_mynode - dist_AB
+                    found_competitive = True
+                    if channel not in best_fees or fee_diff > best_fees[channel]:
+                        best_fees[channel] = fee_diff
+                        
             if not found_competitive:
                 logger.info("No compatative route")
+        else:
+            logger.info("Mynode not on shortest path")
 
     print("\n=== Best Fee per Channel ===")
     if not best_fees:
