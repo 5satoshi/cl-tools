@@ -98,6 +98,8 @@ def run_route_finding(number_of_runs, mynode):
     
     best_fees = {}
     
+    logger.info(f"Starting {number_of_runs} route finding simulations...")
+    
     for i in range(number_of_runs):
         
         tx_sat = random.randint(1,1000000)
@@ -127,6 +129,7 @@ def run_route_finding(number_of_runs, mynode):
         
         comp, hist = gt.label_components(i_DG, directed=True)
         if len(hist) == 0:
+            logger.info(f"Run {i}: Graph empty after capacity filter, skipping.")
             continue
             
         mynode_comp = comp[iv_mynode]
@@ -137,12 +140,13 @@ def run_route_finding(number_of_runs, mynode):
         
         ii_mynode_list = gt.find_vertex(ii_DG, iv_id, mynode)
         if not ii_mynode_list:
-            logger.info("Mynode not found in its own component")
+            logger.info(f"Run {i}: Mynode not found in its own component, skipping.")
             continue
         ii_mynode = ii_mynode_list[0]
         
         valid_nodes = list(ii_DG.vertices())
         if len(valid_nodes) < 3:
+            logger.info(f"Run {i}: Mynode's component only has {len(valid_nodes)} nodes (tx_sat: {tx_sat}), skipping.")
             continue
             
         i_i_node_v = valid_nodes[random.randint(0,len(valid_nodes)-1)]
