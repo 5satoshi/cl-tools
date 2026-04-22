@@ -11,7 +11,7 @@ from datetime import datetime
 import helper
 
 
-def get_graph_from_cli(rpc=".lightning/bitcoin/lightning-rpc",save=True):
+def get_graph_from_cli(rpc=".lightning/bitcoin/lightning-rpc"):
     
     l1 = LightningRpc(rpc)
     
@@ -56,27 +56,14 @@ def get_graph_from_cli(rpc=".lightning/bitcoin/lightning-rpc",save=True):
         e_satoshis[e] = row.get('satoshis', 0)
         e_short_id[e] = row['short_channel_id']
     
-    if save:
-        prefix = datetime.now()
-        DG.save("fee-optimizer-data/" + prefix.strftime("%Y-%m-%dT%H:%M:%S")+'_lightning.gt')
-    
     return DG
 
 
 def run_route_finding(conf):
-    version = "0.1"
+    run_conf = helper.read_config("run", conf)
     
-    data_conf = helper.read_config("data",conf)
-    
-    G = gt.Graph()
-    exec_time = datetime.now()
-    
-    if data_conf['method'] == 'file':
-        G = gt.load_graph(data_conf['file'])
-        exec_time = datetime.strptime(data_conf['datetime'], "%Y-%m-%d %H:%M:%S")### override time of execution by time of data pull as defined in config
-    elif data_conf['method'] == 'cli':
-        rpc = os.environ['HOME']+"/.lightning/bitcoin/lightning-rpc"
-        G = get_graph_from_cli(rpc, data_conf['save'])
+    rpc = os.environ['HOME']+"/.lightning/bitcoin/lightning-rpc"
+    G = get_graph_from_cli(rpc)
     
     e_active = G.edge_properties["active"]
     wDG = gt.GraphView(G, efilt=e_active)
@@ -108,7 +95,7 @@ def run_route_finding(conf):
     
     best_fees = {}
     
-    for i in range(int(data_conf['number_of_runs'])):
+    for i in range(int(run_conf['number_of_runs'])):
         
         i_node_v = nodes[random.randint(0,len(nodes)-1)]
         i_node = v_id[i_node_v]
