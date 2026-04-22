@@ -100,9 +100,13 @@ def run_route_finding(number_of_runs, mynode):
     ### set mynode channel fees to zero for G calc 1
     channels = {}
     for e in mynode_v.out_edges():
+        channels[v_id[e.target()]] = {
+            'short_id': e_short_id[e],
+            'base_fee': e_base_fee[e],
+            'fee_rate': e_fee_rate[e]
+        }
         e_base_fee[e] = 0
         e_fee_rate[e] = 0
-        channels[v_id[e.target()]] = e_short_id[e]
     
     nodes = list(DG.vertices())
     
@@ -201,8 +205,11 @@ def run_route_finding(number_of_runs, mynode):
             while pred_mynode[curr] != ii_mynode:
                 curr = ii_DG.vertex(pred_mynode[curr])
             
-            channel = channels.get(iv_id[curr])
-            if channel:
+            channel_info = channels.get(iv_id[curr])
+            if channel_info:
+                channel = channel_info['short_id']
+                actual_fee = math.floor(channel_info['base_fee'] + tx_sat * (channel_info['fee_rate']/1000000.0) * 1000)
+                
                 i_DG2 = gt.GraphView(ii_DG)
                 vfilt2 = i_DG2.new_vertex_property("bool", val=True)
                 vfilt2[ii_mynode] = False
@@ -214,22 +221,22 @@ def run_route_finding(number_of_runs, mynode):
                 
                 if dist_AB_no_mynode < float('inf'):
                     fee_diff = dist_AB_no_mynode - dist_AB
-                    logger.info(f"Found competitive route! Fee difference: {fee_diff}")
+                    logger.info(f"Found competitive route! Best fee (fee diff): {fee_diff} | Actual fee: {actual_fee}")
                     found_competitive = True
-                    if channel not in best_fees or fee_diff > best_fees[channel]:
-                        best_fees[channel] = fee_diff
+                    if channel not in best_fees or fee_diff > best_fees[channel]['best_fee']:
+                        best_fees[channel] = {'best_fee': fee_diff, 'actual_fee': actual_fee}
                         
             if not found_competitive:
                 logger.info("No competitive route")
         else:
             logger.info("Mynode not on shortest path")
 
-    print("\n=== Best Fee per Channel ===")
+    print("\n=== Best Fee vs Actual Fee per Channel ===")
     if not best_fees:
         print("No competitive routes found across all runs.")
     else:
-        for ch, fee in sorted(best_fees.items()):
-            print(f"Channel {ch}: {fee}")
+        for ch, data in sorted(best_fees.items()):
+            print(f"Channel {ch}: Best Fee = {data['best_fee']} | Actual Fee = {data['actual_fee']}")
 
 
 if __name__ == "__main__":
