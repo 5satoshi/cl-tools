@@ -8,7 +8,6 @@ This directory contains various scripts and utilities for managing channel fees,
 - **`compatative_route_finder.py`**: A tool that interacts with the Lightning RPC to find and compare alternative routing paths across the Lightning Network.
 
 ### Data Synchronization & Updates
-- **`forwards-transfer.py`**: Script focused on extracting and transferring forwarding (routing) event data.
 - **`table-transfer.py`**: A utility script for migrating or transferring data tables, likely between local databases and analytics backends.
 
 ### Utilities
