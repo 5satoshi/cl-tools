@@ -7,6 +7,7 @@ import matplotlib.pyplot as plt
 from pyln.client import LightningRpc
 from datetime import datetime
 import argparse
+from tqdm import tqdm
 
 
 logging.basicConfig(
@@ -99,22 +100,24 @@ def run_route_finding(number_of_runs, mynode):
     
     ### set mynode channel fees to zero for G calc 1
     channels = {}
+    best_fees = {}
     for e in mynode_v.out_edges():
+        ch_id = e_short_id[e]
         channels[v_id[e.target()]] = {
-            'short_id': e_short_id[e],
+            'short_id': ch_id,
             'base_fee': e_base_fee[e],
             'fee_rate': e_fee_rate[e]
         }
+        # Pre-populate best_fees with all channels and default values
+        best_fees[ch_id] = {'best_ppm': None, 'actual_ppm': e_fee_rate[e], 'tested': 0}
         e_base_fee[e] = 0
         e_fee_rate[e] = 0
     
     nodes = list(DG.vertices())
     
-    best_fees = {}
-    
     logger.info(f"Starting {number_of_runs} route finding simulations...")
     
-    for i in range(number_of_runs):
+    for i in tqdm(range(number_of_runs), desc="Simulating routes"):
         
         tx_sat = random.randint(1,1000000)
         
@@ -143,7 +146,6 @@ def run_route_finding(number_of_runs, mynode):
         
         comp, hist = gt.label_components(i_DG, directed=True)
         if len(hist) == 0:
-            logger.info(f"Run {i}: Graph empty after capacity filter, skipping.")
             continue
             
         mynode_comp = comp[iv_mynode]
@@ -154,13 +156,11 @@ def run_route_finding(number_of_runs, mynode):
         
         ii_mynode_list = gt.find_vertex(ii_DG, iv_id, mynode)
         if not ii_mynode_list:
-            logger.info(f"Run {i}: Mynode not found in its own component, skipping.")
             continue
         ii_mynode = ii_mynode_list[0]
         
         valid_nodes = list(ii_DG.vertices())
         if len(valid_nodes) < 3:
-            logger.info(f"Run {i}: Mynode's component only has {len(valid_nodes)} nodes (tx_sat: {tx_sat}), skipping.")
             continue
             
         i_i_node_v = valid_nodes[random.randint(0,len(valid_nodes)-1)]
@@ -177,27 +177,19 @@ def run_route_finding(number_of_runs, mynode):
         for e in i_i_node_v.out_edges():
             e_fee[e] = 0
         
-        logger.info("---")
-        logger.info(f"TX amount: {tx_sat} | A: {i_node[:8]} B: {dest_node[:8]}")
-        
         dist_A, pred_A = gt.shortest_distance(ii_DG, source=i_i_node_v, weights=e_fee, pred_map=True)
         
         dist_AB = dist_A[ii_dest_node]
-        logger.info(f"Distance A -> B: {dist_AB}")
         if dist_AB == float('inf'):
-            logger.info("No route from A to B")
             continue
             
         dist_from_mynode, pred_mynode = gt.shortest_distance(ii_DG, source=ii_mynode, weights=e_fee, pred_map=True)
         
         dist_A_mynode = dist_A[ii_mynode]
         dist_mynode_B = dist_from_mynode[ii_dest_node]
-        logger.info(f"Distance A -> mynode: {dist_A_mynode}")
-        logger.info(f"Distance mynode -> B: {dist_mynode_B}")
         
         # Check if mynode is on a shortest path
         if math.isclose(dist_AB, dist_A_mynode + dist_mynode_B, rel_tol=1e-9):
-            logger.info("Route found with our node on it!")
             found_competitive = False
             
             # Channel is the first hop after mynode toward destination
@@ -208,7 +200,9 @@ def run_route_finding(number_of_runs, mynode):
             channel_info = channels.get(iv_id[curr])
             if channel_info:
                 channel = channel_info['short_id']
-                actual_ppm = channel_info['fee_rate']
+                
+                # Increment how many times this channel evaluated successfully
+                best_fees[channel]['tested'] += 1
                 
                 i_DG2 = gt.GraphView(ii_DG)
                 vfilt2 = i_DG2.new_vertex_property("bool", val=True)
@@ -217,35 +211,25 @@ def run_route_finding(number_of_runs, mynode):
                 
                 comp_dist = gt.shortest_distance(i_DG2, source=i_i_node_v, weights=e_fee)
                 dist_AB_no_mynode = comp_dist[ii_dest_node]
-                logger.info(f"Distance A -> B (no mynode): {dist_AB_no_mynode}")
                 
                 if dist_AB_no_mynode < float('inf'):
                     max_fee = dist_AB_no_mynode - dist_AB
                     # ppm = (fee_msat - base_fee) * 1000 / tx_sat
                     best_ppm = math.floor((max_fee - channel_info['base_fee']) * 1000 / tx_sat)
                     
-                    logger.info(f"Found competitive route! Best PPM: {best_ppm} | Actual PPM: {actual_ppm}")
-                    found_competitive = True
-                    if channel not in best_fees or best_ppm > best_fees[channel]['best_ppm']:
-                        best_fees[channel] = {'best_ppm': best_ppm, 'actual_ppm': actual_ppm}
-                        
-            if not found_competitive:
-                logger.info("No competitive route")
-        else:
-            logger.info("Mynode not on shortest path")
+                    if best_fees[channel]['best_ppm'] is None or best_ppm > best_fees[channel]['best_ppm']:
+                        best_fees[channel]['best_ppm'] = best_ppm
 
     print("\n=== Best PPM vs Actual PPM per Channel ===")
-    if not best_fees:
-        print("No competitive routes found across all runs.")
-    else:
-        for ch, data in sorted(best_fees.items()):
-            print(f"Channel {ch}: Best PPM = {data['best_ppm']} | Actual PPM = {data['actual_ppm']}")
+    for ch, data in sorted(best_fees.items()):
+        b_ppm = data['best_ppm'] if data['best_ppm'] is not None else "N/A"
+        print(f"Channel {ch}: Tested = {data['tested']} | Best PPM = {b_ppm} | Actual PPM = {data['actual_ppm']}")
 
 
 if __name__ == "__main__":
     # execute only if run as a script
     parser = argparse.ArgumentParser()
-    parser.add_argument("--runs", type=int, default=100)
+    parser.add_argument("--runs", type=int, default=2000)
     parser.add_argument("--node", type=str, default="03fe8461ebc025880b58021c540e0b7782bb2bcdc99da9822f5c6d2184a59b8f69")
     args = parser.parse_args()
     
