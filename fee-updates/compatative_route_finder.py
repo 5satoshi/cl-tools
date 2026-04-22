@@ -165,14 +165,21 @@ def run_route_finding(number_of_runs, mynode):
         dist_A, pred_A = gt.shortest_distance(ii_DG, source=i_i_node_v, weights=e_fee, pred_map=True)
         
         dist_AB = dist_A[ii_dest_node]
+        logger.info(f"Distance A -> B: {dist_AB}")
         if dist_AB == float('inf'):
             logger.info("No route from A to B")
             continue
             
         dist_from_mynode, pred_mynode = gt.shortest_distance(ii_DG, source=ii_mynode, weights=e_fee, pred_map=True)
         
+        dist_A_mynode = dist_A[ii_mynode]
+        dist_mynode_B = dist_from_mynode[ii_dest_node]
+        logger.info(f"Distance A -> mynode: {dist_A_mynode}")
+        logger.info(f"Distance mynode -> B: {dist_mynode_B}")
+        
         # Check if mynode is on a shortest path
-        if math.isclose(dist_AB, dist_A[ii_mynode] + dist_from_mynode[ii_dest_node], rel_tol=1e-9):
+        if math.isclose(dist_AB, dist_A_mynode + dist_mynode_B, rel_tol=1e-9):
+            logger.info("Route found with our node on it!")
             found_competitive = False
             
             # Channel is the first hop after mynode toward destination
