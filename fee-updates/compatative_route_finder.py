@@ -196,15 +196,17 @@ def run_route_finding(number_of_runs, mynode):
                 
                 comp_dist = gt.shortest_distance(i_DG2, source=i_i_node_v, weights=e_fee)
                 dist_AB_no_mynode = comp_dist[ii_dest_node]
+                logger.info(f"Distance A -> B (no mynode): {dist_AB_no_mynode}")
                 
                 if dist_AB_no_mynode < float('inf'):
                     fee_diff = dist_AB_no_mynode - dist_AB
+                    logger.info(f"Found competitive route! Fee difference: {fee_diff}")
                     found_competitive = True
                     if channel not in best_fees or fee_diff > best_fees[channel]:
                         best_fees[channel] = fee_diff
                         
             if not found_competitive:
-                logger.info("No compatative route")
+                logger.info("No competitive route")
         else:
             logger.info("Mynode not on shortest path")
 
