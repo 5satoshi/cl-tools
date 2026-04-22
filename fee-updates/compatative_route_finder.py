@@ -4,12 +4,9 @@ import sys, math, os, random, logging
 import graph_tool.all as gt
 import pandas as pd
 import matplotlib.pyplot as plt
-from mysql.connector import MySQLConnection, Error
 from configparser import ConfigParser
 from pyln.client import LightningRpc
 from datetime import datetime
-
-from google.cloud import bigquery
 
 import helper
 
@@ -70,7 +67,6 @@ def run_route_finding(conf):
     version = "0.1"
     
     data_conf = helper.read_config("data",conf)
-    storage = data_conf["storage"]
     
     G = gt.Graph()
     exec_time = datetime.now()
@@ -109,6 +105,8 @@ def run_route_finding(conf):
         channels[v_id[e.target()]] = e_short_id[e]
     
     nodes = list(DG.vertices())
+    
+    best_fees = {}
     
     for i in range(int(data_conf['number_of_runs'])):
         
@@ -193,43 +191,24 @@ def run_route_finding(conf):
             comp_fees = {i_DG2.vertex_properties["id"][v]: comp_dist[v] for v in i_DG2.vertices() if comp_dist[v] < float('inf')}
             fees = {iv_id[v]: dist[v] for v in ii_DG.vertices()}
             
-            val = []
+            found_competitive = False
             for to, peer, ch in destinations:
                 theirs = comp_fees.get(to)
                 if theirs is not None:
                     fee = theirs - fees[to]
-                    if storage=="bigquery":
-                        val.append({'source':i_node,'destination':to,'node':mynode,'peer':peer,'channel_id':ch,'tx':tx_sat,'fee':fee,'gossip_date':exec_time.strftime('%Y-%m-%d %H:%M:%S'),'version':version})
-                    elif storage=="mysql":
-                        val.append((i_node,to,mynode,peer,ch,tx_sat,fee,exec_time.strftime('%Y-%m-%d %H:%M:%S'),version))
-                    else:
-                        logging.info({'source':i_node,'destination':to,'node':mynode,'peer':peer,'channel_id':ch,'tx':tx_sat,'fee':fee,'gossip_date':exec_time.strftime('%Y-%m-%d %H:%M:%S'),'version':version})
+                    found_competitive = True
+                    if ch not in best_fees or fee > best_fees[ch]:
+                        best_fees[ch] = fee
             
-            if val==[]:
+            if not found_competitive:
                 logging.info("No compatative route")
-            else:
-                if storage=="bigquery":
-                    bq_client = bigquery.Client()
-                    table = bq_client.get_table(helper.read_config("bigquery",conf)["table"])  ###todo move into config
-                    errors = bq_client.insert_rows_json(table, val)
-                    if errors == []:
-                        logging.info("Data successfully submitted to bigquery")
-                    else:
-                        logging.error(errors)
-                        
-                elif storage=="mysql":
-                    db_config = helper.read_config("mysql",conf)
-                    conn = MySQLConnection(**db_config)
-                    
-                    mycursor = conn.cursor()
-                    
-                    sql = "INSERT INTO routing_competition (source, destination, node, peer, channel_id, tx, fee, gossip_date, version) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)"
-                    mycursor.executemany(sql, val)
-                    
-                    conn.commit()
-                    
-                    mycursor.close()
-                    conn.close()
+
+    print("\n=== Best Fee per Channel ===")
+    if not best_fees:
+        print("No competitive routes found across all runs.")
+    else:
+        for ch, fee in sorted(best_fees.items()):
+            print(f"Channel {ch}: {fee}")
 
 
 if __name__ == "__main__":
