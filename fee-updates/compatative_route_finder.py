@@ -148,37 +148,39 @@ def run_route_finding(number_of_runs, mynode):
         
         dist, pred = gt.shortest_distance(ii_DG, source=i_i_node_v, weights=e_fee, pred_map=True)
         
-        paths = {}
-        for v in ii_DG.vertices():
-            if dist[v] < float('inf') and v != i_i_node_v:
-                path = []
-                curr = v
-                while curr != i_i_node_v:
-                    path.append(iv_id[curr])
-                    curr = ii_DG.vertex(pred[curr])
-                path.append(iv_id[i_i_node_v])
-                path.reverse()
-                paths[iv_id[v]] = path
-                
-        for dest,path in paths.items():
-            if mynode in path and dest!=mynode:
-                found=True
-                channel = channels[path[path.index(mynode)+1]]
-                peer = path[path.index(mynode)-1]
-                destinations.append((dest,peer,channel))
-        
+        ii_mynode_list = gt.find_vertex(ii_DG, iv_id, mynode)
+        if ii_mynode_list:
+            ii_mynode = ii_mynode_list[0]
+            dist_from_mynode, pred_mynode = gt.shortest_distance(ii_DG, source=ii_mynode, weights=e_fee, pred_map=True)
+            
+            for v in ii_DG.vertices():
+                if v != i_i_node_v and v != ii_mynode and dist[v] < float('inf'):
+                    # Check if mynode is on a shortest path
+                    if math.isclose(dist[v], dist[ii_mynode] + dist_from_mynode[v], rel_tol=1e-9):
+                        found = True
+                        
+                        # Peer is the predecessor to mynode from source
+                        peer_v = ii_DG.vertex(pred[ii_mynode])
+                        peer = iv_id[peer_v]
+                        
+                        # Channel is the first hop after mynode toward destination
+                        curr = v
+                        while pred_mynode[curr] != ii_mynode:
+                            curr = ii_DG.vertex(pred_mynode[curr])
+                        
+                        channel = channels.get(iv_id[curr])
+                        if channel:
+                            destinations.append((iv_id[v], peer, channel))
+            
         if found:
-            i_DG2 = gt.Graph(ii_DG, prune=True)
+            i_DG2 = gt.GraphView(ii_DG)
             vfilt2 = i_DG2.new_vertex_property("bool", val=True)
-            i2_mynode = gt.find_vertex(i_DG2, i_DG2.vertex_properties["id"], mynode)[0]
-            vfilt2[i2_mynode] = False
+            vfilt2[ii_mynode] = False
             i_DG2.set_vertex_filter(vfilt2)
             
-            i2_i_node_v = gt.find_vertex(i_DG2, i_DG2.vertex_properties["id"], i_node)[0]
-            e2_fee = i_DG2.edge_properties[e_fee.name] if e_fee.name else i_DG2.edge_properties.get(e_fee, e_fee)
-            comp_dist = gt.shortest_distance(i_DG2, source=i2_i_node_v, weights=e_fee)
+            comp_dist = gt.shortest_distance(i_DG2, source=i_i_node_v, weights=e_fee)
             
-            comp_fees = {i_DG2.vertex_properties["id"][v]: comp_dist[v] for v in i_DG2.vertices() if comp_dist[v] < float('inf')}
+            comp_fees = {iv_id[v]: comp_dist[v] for v in i_DG2.vertices() if comp_dist[v] < float('inf')}
             fees = {iv_id[v]: dist[v] for v in ii_DG.vertices()}
             
             found_competitive = False
