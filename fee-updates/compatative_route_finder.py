@@ -58,7 +58,17 @@ def get_graph_from_cli(rpc=".lightning/bitcoin/lightning-rpc"):
         e_active[e] = row['active']
         e_base_fee[e] = row['base_fee_millisatoshi']
         e_fee_rate[e] = row['fee_per_millionth']
-        e_satoshis[e] = row.get('satoshis', 0)
+        
+        # Handle newer CLN versions that use amount_msat instead of satoshis
+        amt_msat = row.get('amount_msat', 0)
+        if isinstance(amt_msat, str) and amt_msat.endswith('msat'):
+            amt_msat = int(amt_msat[:-4])
+        elif isinstance(amt_msat, dict) and 'msat' in amt_msat:
+            amt_msat = amt_msat['msat']
+        
+        sat = row.get('satoshis', amt_msat / 1000.0)
+        e_satoshis[e] = float(sat)
+        
         e_short_id[e] = row['short_channel_id']
     
     return DG
