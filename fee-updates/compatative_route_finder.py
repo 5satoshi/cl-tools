@@ -100,36 +100,16 @@ def run_route_finding(number_of_runs, mynode):
     
     for i in range(number_of_runs):
         
-        i_node_v = nodes[random.randint(0,len(nodes)-1)]
-        dest_node_v = nodes[random.randint(0,len(nodes)-1)]
-        
-        # Ensure we pick distinct A, B, and neither is mynode
-        while dest_node_v == i_node_v or dest_node_v == mynode_v or i_node_v == mynode_v:
-            i_node_v = nodes[random.randint(0,len(nodes)-1)]
-            dest_node_v = nodes[random.randint(0,len(nodes)-1)]
-            
-        i_node = v_id[i_node_v]
-        dest_node = v_id[dest_node_v]
-        
         tx_sat = random.randint(1,1000000)
         
         i_DG = gt.Graph(DG, prune=True)
         iv_id = i_DG.vertex_properties["id"]
         iv_mynode = gt.find_vertex(i_DG, iv_id, mynode)[0]
-        i_i_node_v = gt.find_vertex(i_DG, iv_id, i_node)[0]
-        i_dest_node_v = gt.find_vertex(i_DG, iv_id, dest_node)[0]
         
         ie_base_fee = i_DG.edge_properties["base_fee_millisatoshi"]
         ie_fee_rate = i_DG.edge_properties["fee_per_millionth"]
         ie_satoshis = i_DG.edge_properties["satoshis"]
         ie_short_id = i_DG.edge_properties["short_channel_id"]
-        
-        for e in i_i_node_v.out_edges():
-            ie_base_fee[e] = 0
-            ie_fee_rate[e] = 0
-        
-        logger.info("---")
-        logger.info(f"TX amount: {tx_sat} | A: {i_node[:8]} B: {dest_node[:8]}")
         
         e_fee = i_DG.new_edge_property("double")
         efilt = i_DG.new_edge_property("bool", val=True)
@@ -145,24 +125,44 @@ def run_route_finding(number_of_runs, mynode):
         
         i_DG.set_edge_filter(efilt)
         
-        comp, hist = gt.label_components(i_DG)
-        if comp[i_i_node_v] != comp[i_dest_node_v] or comp[i_i_node_v] != comp[iv_mynode]:
-            logger.info("Nodes not in same component")
+        comp, hist = gt.label_components(i_DG, directed=True)
+        if len(hist) == 0:
             continue
             
-        target_comp = comp[i_i_node_v]
+        largest_comp = hist.argmax()
         vfilt = i_DG.new_vertex_property("bool")
-        vfilt.a = (comp.a == target_comp)
+        vfilt.a = (comp.a == largest_comp)
         
         ii_DG = gt.GraphView(i_DG, vfilt=vfilt)
         
-        dist_A, pred_A = gt.shortest_distance(ii_DG, source=i_i_node_v, weights=e_fee, pred_map=True)
-        
         ii_mynode_list = gt.find_vertex(ii_DG, iv_id, mynode)
         if not ii_mynode_list:
+            logger.info("Mynode not in largest component")
             continue
         ii_mynode = ii_mynode_list[0]
-        ii_dest_node = gt.find_vertex(ii_DG, iv_id, dest_node)[0]
+        
+        valid_nodes = list(ii_DG.vertices())
+        if len(valid_nodes) < 3:
+            continue
+            
+        i_i_node_v = valid_nodes[random.randint(0,len(valid_nodes)-1)]
+        ii_dest_node = valid_nodes[random.randint(0,len(valid_nodes)-1)]
+        
+        # Ensure we pick distinct A, B, and neither is mynode
+        while ii_dest_node == i_i_node_v or ii_dest_node == ii_mynode or i_i_node_v == ii_mynode:
+            i_i_node_v = valid_nodes[random.randint(0,len(valid_nodes)-1)]
+            ii_dest_node = valid_nodes[random.randint(0,len(valid_nodes)-1)]
+            
+        i_node = iv_id[i_i_node_v]
+        dest_node = iv_id[ii_dest_node]
+        
+        for e in i_i_node_v.out_edges():
+            e_fee[e] = 0
+        
+        logger.info("---")
+        logger.info(f"TX amount: {tx_sat} | A: {i_node[:8]} B: {dest_node[:8]}")
+        
+        dist_A, pred_A = gt.shortest_distance(ii_DG, source=i_i_node_v, weights=e_fee, pred_map=True)
         
         dist_AB = dist_A[ii_dest_node]
         if dist_AB == float('inf'):
