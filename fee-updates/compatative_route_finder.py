@@ -4,11 +4,16 @@ import sys, math, os, random, logging
 import graph_tool.all as gt
 import pandas as pd
 import matplotlib.pyplot as plt
-from configparser import ConfigParser
 from pyln.client import LightningRpc
 from datetime import datetime
+import argparse
 
-import helper
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s | %(levelname)s | %(name)s | %(message)s"
+)
+logger = logging.getLogger("RouteFinder")
 
 
 def get_graph_from_cli(rpc=".lightning/bitcoin/lightning-rpc"):
@@ -59,8 +64,7 @@ def get_graph_from_cli(rpc=".lightning/bitcoin/lightning-rpc"):
     return DG
 
 
-def run_route_finding(conf):
-    run_conf = helper.read_config("run", conf)
+def run_route_finding(number_of_runs, mynode):
     
     rpc = os.environ['HOME']+"/.lightning/bitcoin/lightning-rpc"
     G = get_graph_from_cli(rpc)
@@ -75,7 +79,6 @@ def run_route_finding(conf):
     v_filt.a = (comp.a == largest_comp)
     DG = gt.GraphView(wDG, vfilt=v_filt)
     
-    mynode = helper.read_config("node",conf)["id"]
     v_id = DG.vertex_properties["id"]
     mynode_v = gt.find_vertex(DG, v_id, mynode)[0]
     
@@ -95,7 +98,7 @@ def run_route_finding(conf):
     
     best_fees = {}
     
-    for i in range(int(run_conf['number_of_runs'])):
+    for i in range(number_of_runs):
         
         i_node_v = nodes[random.randint(0,len(nodes)-1)]
         i_node = v_id[i_node_v]
@@ -116,8 +119,8 @@ def run_route_finding(conf):
             ie_base_fee[e] = 0
             ie_fee_rate[e] = 0
         
-        logging.info("---")
-        logging.info("TX amount: " + str(tx_sat))
+        logger.info("---")
+        logger.info("TX amount: " + str(tx_sat))
         
         e_fee = i_DG.new_edge_property("double")
         efilt = i_DG.new_edge_property("bool", val=True)
@@ -188,7 +191,7 @@ def run_route_finding(conf):
                         best_fees[ch] = fee
             
             if not found_competitive:
-                logging.info("No compatative route")
+                logger.info("No compatative route")
 
     print("\n=== Best Fee per Channel ===")
     if not best_fees:
@@ -200,14 +203,12 @@ def run_route_finding(conf):
 
 if __name__ == "__main__":
     # execute only if run as a script
-    cfg_file = sys.argv[1]
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--runs", type=int, default=100)
+    parser.add_argument("--node", type=str, default="03fe8461ebc025880b58021c540e0b7782bb2bcdc99da9822f5c6d2184a59b8f69")
+    args = parser.parse_args()
     
-    logging.basicConfig(
-        level=logging.INFO,
-        format="%(asctime)s | %(levelname)s | %(name)s | %(message)s"
-    )
-
-    run_route_finding(cfg_file)
+    run_route_finding(args.runs, args.node)
 
 
 
