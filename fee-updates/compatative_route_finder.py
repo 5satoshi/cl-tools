@@ -1,7 +1,7 @@
 #!/usr/bin/python
 
 import sys, math, os, random, logging
-import networkx as nx
+import graph_tool.all as gt
 import pandas as pd
 import matplotlib.pyplot as plt
 from mysql.connector import MySQLConnection, Error
@@ -22,11 +22,46 @@ def get_graph_from_cli(rpc=".lightning/bitcoin/lightning-rpc",save=True):
     
     dfc = pd.DataFrame(channels["channels"])
     
-    DG = nx.from_pandas_edgelist(dfc,"source","destination",edge_attr=True, create_using=nx.MultiDiGraph())
+    DG = gt.Graph(directed=True)
+    v_id = DG.new_vertex_property("string")
+    DG.vertex_properties["id"] = v_id
+    
+    e_active = DG.new_edge_property("bool")
+    e_base_fee = DG.new_edge_property("double")
+    e_fee_rate = DG.new_edge_property("double")
+    e_satoshis = DG.new_edge_property("double")
+    e_short_id = DG.new_edge_property("string")
+    
+    DG.edge_properties["active"] = e_active
+    DG.edge_properties["base_fee_millisatoshi"] = e_base_fee
+    DG.edge_properties["fee_per_millionth"] = e_fee_rate
+    DG.edge_properties["satoshis"] = e_satoshis
+    DG.edge_properties["short_channel_id"] = e_short_id
+
+    vertex_map = {}
+    for _, row in dfc.iterrows():
+        u_id = row['source']
+        v_id_str = row['destination']
+        
+        if u_id not in vertex_map:
+            v = DG.add_vertex()
+            v_id[v] = u_id
+            vertex_map[u_id] = v
+        if v_id_str not in vertex_map:
+            v = DG.add_vertex()
+            v_id[v] = v_id_str
+            vertex_map[v_id_str] = v
+            
+        e = DG.add_edge(vertex_map[u_id], vertex_map[v_id_str])
+        e_active[e] = row['active']
+        e_base_fee[e] = row['base_fee_millisatoshi']
+        e_fee_rate[e] = row['fee_per_millionth']
+        e_satoshis[e] = row.get('satoshis', 0)
+        e_short_id[e] = row['short_channel_id']
     
     if save:
         prefix = datetime.now()
-        nx.write_gpickle(DG,"fee-optimizer-data/" + prefix.strftime("%Y-%m-%dT%H:%M:%S")+'_lightning.pkl')
+        DG.save("fee-optimizer-data/" + prefix.strftime("%Y-%m-%dT%H:%M:%S")+'_lightning.gt')
     
     return DG
 
@@ -37,78 +72,106 @@ def run_route_finding(conf):
     data_conf = helper.read_config("data",conf)
     storage = data_conf["storage"]
     
-    G = nx.MultiDiGraph()
+    G = gt.Graph()
     exec_time = datetime.now()
     
     if data_conf['method'] == 'file':
-        G = nx.read_gpickle(data_conf['file'])
+        G = gt.load_graph(data_conf['file'])
         exec_time = datetime.strptime(data_conf['datetime'], "%Y-%m-%d %H:%M:%S")### override time of execution by time of data pull as defined in config
     elif data_conf['method'] == 'cli':
         rpc = os.environ['HOME']+"/.lightning/bitcoin/lightning-rpc"
         G = get_graph_from_cli(rpc, data_conf['save'])
     
-    active_edges = (
-        (source,dest,data)
-        for source, dest, data
-        in G.edges(data=True)
-        if data['active']==True
-    )
+    e_active = G.edge_properties["active"]
+    wDG = gt.GraphView(G, efilt=e_active)
     
-    wDG = nx.MultiDiGraph(active_edges)
-    
-    # clean for connected component of mynode
-    DG = wDG.subgraph(max(nx.strongly_connected_components(wDG),key=len))
+    # clean for connected component
+    comp, hist = gt.label_components(wDG)
+    largest_comp = hist.argmax()
+    v_filt = wDG.new_vertex_property("bool")
+    v_filt.a = (comp.a == largest_comp)
+    DG = gt.GraphView(wDG, vfilt=v_filt)
     
     mynode = helper.read_config("node",conf)["id"]
+    v_id = DG.vertex_properties["id"]
+    mynode_v = gt.find_vertex(DG, v_id, mynode)[0]
+    
+    e_base_fee = DG.edge_properties["base_fee_millisatoshi"]
+    e_fee_rate = DG.edge_properties["fee_per_millionth"]
+    e_short_id = DG.edge_properties["short_channel_id"]
+    e_satoshis = DG.edge_properties["satoshis"]
     
     ### set mynode channel fees to zero for G calc 1
     channels = {}
-    for source, dest, key, data in DG.out_edges(mynode,keys=True,data=True):
-        DG[source][dest][key]['base_fee_millisatoshi'] = 0
-        DG[source][dest][key]['fee_per_millionth'] = 0
-        channels[dest] = DG[source][dest][key]['short_channel_id']
+    for e in mynode_v.out_edges():
+        e_base_fee[e] = 0
+        e_fee_rate[e] = 0
+        channels[v_id[e.target()]] = e_short_id[e]
     
-    
-    nodes = list(DG.nodes())
+    nodes = list(DG.vertices())
     
     for i in range(int(data_conf['number_of_runs'])):
         
-        i_node = nodes[random.randint(0,len(nodes)-1)]
+        i_node_v = nodes[random.randint(0,len(nodes)-1)]
+        i_node = v_id[i_node_v]
         
         tx_sat = random.randint(1,1000000)
         
-        i_DG = nx.MultiDiGraph(DG)
+        i_DG = gt.Graph(DG, prune=True)
+        iv_id = i_DG.vertex_properties["id"]
+        iv_mynode = gt.find_vertex(i_DG, iv_id, mynode)[0]
+        i_i_node_v = gt.find_vertex(i_DG, iv_id, i_node)[0]
         
-        for source, dest, key, data in i_DG.out_edges(i_node,keys=True,data=True):
-            i_DG[source][dest][key]['base_fee_millisatoshi'] = 0
-            i_DG[source][dest][key]['fee_per_millionth'] = 0
+        ie_base_fee = i_DG.edge_properties["base_fee_millisatoshi"]
+        ie_fee_rate = i_DG.edge_properties["fee_per_millionth"]
+        ie_satoshis = i_DG.edge_properties["satoshis"]
+        ie_short_id = i_DG.edge_properties["short_channel_id"]
+        
+        for e in i_i_node_v.out_edges():
+            ie_base_fee[e] = 0
+            ie_fee_rate[e] = 0
         
         logging.info("---")
         logging.info("TX amount: " + str(tx_sat))
         
-        useless_edges = []
-        # calculate fee per tx size
-        for source, dest, key, data in i_DG.out_edges(keys=True,data=True):
-            if i_DG[source][dest][key]['satoshis'] < 2.5*tx_sat:
-                useless_edges.append((source, dest, key))
-            else:
-                a = i_DG[source][dest][key]['base_fee_millisatoshi']
-                b = i_DG[source][dest][key]['fee_per_millionth']/1000000
-                i_DG[source][dest][key]['fee'] = math.floor(a + tx_sat*b*1000)
+        e_fee = i_DG.new_edge_property("double")
+        efilt = i_DG.new_edge_property("bool", val=True)
         
-        for s,d,k in useless_edges:
-            i_DG.remove_edge(s, d, k)
+        # calculate fee per tx size
+        for e in i_DG.edges():
+            if ie_satoshis[e] < 2.5*tx_sat:
+                efilt[e] = False
+            else:
+                a = ie_base_fee[e]
+                b = ie_fee_rate[e]/1000000.0
+                e_fee[e] = math.floor(a + tx_sat*b*1000)
+        
+        i_DG.set_edge_filter(efilt)
         
         found = False
         destinations = []
         
-        for i_nodes in nx.strongly_connected_components(i_DG):
-            if i_node in i_nodes:
-                break
+        comp, hist = gt.label_components(i_DG)
+        target_comp = comp[i_i_node_v]
+        vfilt = i_DG.new_vertex_property("bool")
+        vfilt.a = (comp.a == target_comp)
         
-        ii_DG = i_DG.subgraph(i_nodes)
+        ii_DG = gt.GraphView(i_DG, vfilt=vfilt)
         
-        fees, paths = nx.single_source_dijkstra(ii_DG,i_node,weight="fee")
+        dist, pred = gt.shortest_distance(ii_DG, source=i_i_node_v, weights=e_fee, pred_map=True)
+        
+        paths = {}
+        for v in ii_DG.vertices():
+            if dist[v] < float('inf') and v != i_i_node_v:
+                path = []
+                curr = v
+                while curr != i_i_node_v:
+                    path.append(iv_id[curr])
+                    curr = ii_DG.vertex(pred[curr])
+                path.append(iv_id[i_i_node_v])
+                path.reverse()
+                paths[iv_id[v]] = path
+                
         for dest,path in paths.items():
             if mynode in path and dest!=mynode:
                 found=True
@@ -116,16 +179,24 @@ def run_route_finding(conf):
                 peer = path[path.index(mynode)-1]
                 destinations.append((dest,peer,channel))
         
-        comp_path = comp_fees = {}
         if found:
-            i_DG2 = nx.MultiDiGraph(ii_DG)
-            i_DG2.remove_node(mynode)
-            comp_fees, comp_paths = nx.single_source_dijkstra(i_DG2,i_node,weight="fee")
+            i_DG2 = gt.Graph(ii_DG, prune=True)
+            vfilt2 = i_DG2.new_vertex_property("bool", val=True)
+            i2_mynode = gt.find_vertex(i_DG2, i_DG2.vertex_properties["id"], mynode)[0]
+            vfilt2[i2_mynode] = False
+            i_DG2.set_vertex_filter(vfilt2)
+            
+            i2_i_node_v = gt.find_vertex(i_DG2, i_DG2.vertex_properties["id"], i_node)[0]
+            e2_fee = i_DG2.edge_properties[e_fee.name] if e_fee.name else i_DG2.edge_properties.get(e_fee, e_fee)
+            comp_dist = gt.shortest_distance(i_DG2, source=i2_i_node_v, weights=e_fee)
+            
+            comp_fees = {i_DG2.vertex_properties["id"][v]: comp_dist[v] for v in i_DG2.vertices() if comp_dist[v] < float('inf')}
+            fees = {iv_id[v]: dist[v] for v in ii_DG.vertices()}
             
             val = []
             for to, peer, ch in destinations:
                 theirs = comp_fees.get(to)
-                if theirs:
+                if theirs is not None:
                     fee = theirs - fees[to]
                     if storage=="bigquery":
                         val.append({'source':i_node,'destination':to,'node':mynode,'peer':peer,'channel_id':ch,'tx':tx_sat,'fee':fee,'gossip_date':exec_time.strftime('%Y-%m-%d %H:%M:%S'),'version':version})
