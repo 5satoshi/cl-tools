@@ -129,15 +129,15 @@ def run_route_finding(number_of_runs, mynode):
         if len(hist) == 0:
             continue
             
-        largest_comp = hist.argmax()
+        mynode_comp = comp[iv_mynode]
         vfilt = i_DG.new_vertex_property("bool")
-        vfilt.a = (comp.a == largest_comp)
+        vfilt.a = (comp.a == mynode_comp)
         
         ii_DG = gt.GraphView(i_DG, vfilt=vfilt)
         
         ii_mynode_list = gt.find_vertex(ii_DG, iv_id, mynode)
         if not ii_mynode_list:
-            logger.info("Mynode not in largest component")
+            logger.info("Mynode not found in its own component")
             continue
         ii_mynode = ii_mynode_list[0]
         
