@@ -8,6 +8,7 @@ from pyln.client import LightningRpc
 from datetime import datetime
 import argparse
 from tqdm import tqdm
+import csv
 
 
 logging.basicConfig(
@@ -257,11 +258,20 @@ def run_route_finding(number_of_runs, mynode):
                         best_fees[channel]['best_ppm'] = best_ppm
 
     print("\n=== Best PPM vs Actual PPM per Channel ===")
-    for ch, data in sorted(best_fees.items()):
-        b_ppm = data['best_ppm'] if data['best_ppm'] is not None else "N/A"
-        c0 = data.get('cent_0', 0.0)
-        c1 = data.get('cent_1', 0.0)
-        print(f"Channel {ch}: Tested = {data['tested']} | Best PPM = {b_ppm} | Actual PPM = {data['actual_ppm']} | Cent(0) = {c0:.6f} | Cent(1) = {c1:.6f}")
+    csv_file = "route_finder_results.csv"
+    with open(csv_file, mode='w', newline='') as f:
+        writer = csv.writer(f)
+        writer.writerow(["Channel", "Tested", "Best_PPM", "Actual_PPM", "Cent_0", "Cent_1"])
+        
+        for ch, data in sorted(best_fees.items()):
+            b_ppm = data['best_ppm'] if data['best_ppm'] is not None else "N/A"
+            c0 = data.get('cent_0', 0.0)
+            c1 = data.get('cent_1', 0.0)
+            
+            print(f"Channel {ch}: Tested = {data['tested']} | Best PPM = {b_ppm} | Actual PPM = {data['actual_ppm']} | Cent(0) = {c0:.6f} | Cent(1) = {c1:.6f}")
+            writer.writerow([ch, data['tested'], b_ppm, data['actual_ppm'], f"{c0:.6f}", f"{c1:.6f}"])
+            
+    logger.info(f"Results saved to {csv_file}")
 
 
 if __name__ == "__main__":
