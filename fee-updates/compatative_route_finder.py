@@ -115,6 +115,42 @@ def run_route_finding(number_of_runs, mynode):
     
     nodes = list(DG.vertices())
     
+    # --- Centrality Calculations ---
+    tx_sat_cent = 80000
+    
+    # 1. Centrality with mynode fees = 0 (currently set above)
+    e_fee_cent_0 = DG.new_edge_property("double")
+    for e in DG.edges():
+        a = e_base_fee[e]
+        b = e_fee_rate[e] / 1000000.0
+        e_fee_cent_0[e] = math.floor(a + tx_sat_cent * b * 1000)
+        
+    logger.info("Computing betweenness centrality (fees=0)...")
+    _, e_betw_0 = gt.betweenness(DG, weight=e_fee_cent_0)
+    
+    for e in mynode_v.out_edges():
+        ch_id = e_short_id[e]
+        best_fees[ch_id]['cent_0'] = e_betw_0[e]
+        
+    # 2. Centrality with mynode ppm = 1
+    for e in mynode_v.out_edges():
+        e_fee_rate[e] = 1
+        
+    e_fee_cent_1 = DG.new_edge_property("double")
+    for e in DG.edges():
+        a = e_base_fee[e]
+        b = e_fee_rate[e] / 1000000.0
+        e_fee_cent_1[e] = math.floor(a + tx_sat_cent * b * 1000)
+        
+    logger.info("Computing betweenness centrality (ppm=1)...")
+    _, e_betw_1 = gt.betweenness(DG, weight=e_fee_cent_1)
+    
+    for e in mynode_v.out_edges():
+        ch_id = e_short_id[e]
+        best_fees[ch_id]['cent_1'] = e_betw_1[e]
+        # Reset back to 0 for the route finding simulations
+        e_fee_rate[e] = 0
+
     logger.info(f"Starting {number_of_runs} route finding simulations...")
     
     for i in tqdm(range(number_of_runs), desc="Simulating routes"):
@@ -223,7 +259,9 @@ def run_route_finding(number_of_runs, mynode):
     print("\n=== Best PPM vs Actual PPM per Channel ===")
     for ch, data in sorted(best_fees.items()):
         b_ppm = data['best_ppm'] if data['best_ppm'] is not None else "N/A"
-        print(f"Channel {ch}: Tested = {data['tested']} | Best PPM = {b_ppm} | Actual PPM = {data['actual_ppm']}")
+        c0 = data.get('cent_0', 0.0)
+        c1 = data.get('cent_1', 0.0)
+        print(f"Channel {ch}: Tested = {data['tested']} | Best PPM = {b_ppm} | Actual PPM = {data['actual_ppm']} | Cent(0) = {c0:.6f} | Cent(1) = {c1:.6f}")
 
 
 if __name__ == "__main__":
