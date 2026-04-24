@@ -143,7 +143,7 @@ def run_centrality_sweep(mynode, input_csv=None):
         expected_next_ppms = []
         last_revs = {ch_id: 0.0 for ch_id in channel_best}
         for res in results:
-            if res[1] == highest_ppm:
+            if res[1] == highest_ppm and res[0] in channel_best:
                 last_revs[res[0]] = float(res[3])
                 
         for ch_id, last_rev in last_revs.items():
