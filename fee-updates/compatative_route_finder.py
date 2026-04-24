@@ -107,21 +107,21 @@ def run_centrality_sweep(mynode):
     tx_sat_cent = 80000
     e_weight = DG.new_edge_property("double")
     
-    # Sweep 1-20, then in steps of 10 up to 100
-    ppm_points = list(range(1, 21)) + [30, 40, 50, 60, 70, 80, 90, 100]
-    logger.info(f"Starting centrality sweep for PPM points: {ppm_points}...")
+    logger.info("Starting dynamic iterative PPM optimization...")
     
     channel_best = {}
+    current_ppms = {}
     for e in mynode_v.out_edges():
-        channel_best[e_short_id[e]] = {'best_ppm': 0, 'max_rev': -1.0}
+        ch_id = e_short_id[e]
+        channel_best[ch_id] = {'best_ppm': 1, 'max_rev': -1.0}
+        current_ppms[ch_id] = 1  # Start all channels at PPM 1
         
-    global_max_rev = -1.0
-    global_best_ppm = 0
+    max_iterations = 30
     
-    for ppm in tqdm(ppm_points, desc="Sweeping PPM"):
-        # Update mynode out-edges PPM
+    for iteration in tqdm(range(max_iterations), desc="Optimizing PPM"):
+        # Update mynode out-edges PPM dynamically
         for e in mynode_v.out_edges():
-            e_fee_rate[e] = ppm
+            e_fee_rate[e] = current_ppms[e_short_id[e]]
             
         # Compute edge weights for the whole graph based on 80k sat tx
         for e in DG.edges():
@@ -132,22 +132,45 @@ def run_centrality_sweep(mynode):
         # Compute betweenness
         _, e_betw = gt.betweenness(DG, weight=e_weight)
         
-        total_rev_for_ppm = 0.0
-        # Record results for mynode's channels
+        raw_expected = {}
+        revenues = {}
+        
+        # Record results and calculate next expected step
         for e in mynode_v.out_edges():
             ch_id = e_short_id[e]
+            ppm = current_ppms[ch_id]
             cent = e_betw[e]
             revenue = cent * ppm
-            total_rev_for_ppm += revenue
+            revenues[ch_id] = revenue
+            
             results.append([ch_id, ppm, f"{cent:.8f}", f"{revenue:.8f}"])
             
+            # Update max revenue
             if revenue > channel_best[ch_id]['max_rev']:
                 channel_best[ch_id]['max_rev'] = revenue
                 channel_best[ch_id]['best_ppm'] = ppm
                 
-        if total_rev_for_ppm > global_max_rev:
-            global_max_rev = total_rev_for_ppm
-            global_best_ppm = ppm
+            if revenue > 0:
+                raw_expected[ch_id] = math.floor((channel_best[ch_id]['max_rev'] / revenue) * ppm)
+            else:
+                raw_expected[ch_id] = ppm
+                
+        # Determine actual next step ensuring we move forward
+        for e in mynode_v.out_edges():
+            ch_id = e_short_id[e]
+            ppm = current_ppms[ch_id]
+            next_ppm = raw_expected[ch_id]
+            
+            if revenues[ch_id] > 0:
+                if next_ppm <= ppm:
+                    # Find smallest expected maximum of another channel that moves us forward
+                    others = [raw_expected[o_id] for o_id in raw_expected if o_id != ch_id and raw_expected[o_id] > ppm]
+                    if others:
+                        next_ppm = min(others)
+                    else:
+                        next_ppm = ppm + 1
+            
+            current_ppms[ch_id] = next_ppm
             
     csv_file = "centrality_sweep_results.csv"
     with open(csv_file, mode='w', newline='') as f:
@@ -158,10 +181,13 @@ def run_centrality_sweep(mynode):
     logger.info(f"Results saved to {csv_file}")
     
     print("\n=== Optimal Revenue PPM per Channel ===")
+    total_opt_revenue = 0.0
     for ch, data in sorted(channel_best.items()):
         print(f"Channel {ch}: Optimal PPM = {data['best_ppm']} | Max Revenue Potential = {data['max_rev']:.8f}")
-        
-    print(f"\nTotal Node Revenue is maximized at PPM = {global_best_ppm} (Max Total Revenue Potential = {global_max_rev:.8f})")
+        if data['max_rev'] > 0:
+            total_opt_revenue += data['max_rev']
+            
+    print(f"\nTotal Node Revenue Potential across optimized channels = {total_opt_revenue:.8f}")
 
 
 if __name__ == "__main__":
