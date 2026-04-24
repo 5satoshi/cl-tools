@@ -76,7 +76,7 @@ def get_graph_from_cli(rpc=".lightning/bitcoin/lightning-rpc"):
     return DG
 
 
-def run_centrality_sweep(mynode, start_ppm=1):
+def run_centrality_sweep(mynode, input_csv=None):
     
     rpc = os.environ['HOME']+"/.lightning/bitcoin/lightning-rpc"
     G = get_graph_from_cli(rpc)
@@ -112,9 +112,50 @@ def run_centrality_sweep(mynode, start_ppm=1):
     channel_best = {}
     for e in mynode_v.out_edges():
         ch_id = e_short_id[e]
-        channel_best[ch_id] = {'best_ppm': start_ppm, 'max_rev': -1.0}
+        channel_best[ch_id] = {'best_ppm': 1, 'max_rev': -1.0}
         
-    current_global_ppm = start_ppm
+    current_global_ppm = 1
+    
+    if input_csv and os.path.exists(input_csv):
+        logger.info(f"Loading previous results from {input_csv}...")
+        highest_ppm = 1
+        with open(input_csv, mode='r') as f:
+            reader = csv.reader(f)
+            header = next(reader, None)
+            for row in reader:
+                if not row or len(row) < 4:
+                    continue
+                ch_id, ppm_str, cent_str, rev_str = row
+                ppm = int(ppm_str)
+                rev = float(rev_str)
+                
+                results.append([ch_id, ppm, cent_str, rev_str])
+                
+                if ch_id in channel_best:
+                    if rev > channel_best[ch_id]['max_rev']:
+                        channel_best[ch_id]['max_rev'] = rev
+                        channel_best[ch_id]['best_ppm'] = ppm
+                
+                if ppm > highest_ppm:
+                    highest_ppm = ppm
+                    
+        # Find the last revenues at highest_ppm to calculate next step
+        expected_next_ppms = []
+        last_revs = {ch_id: 0.0 for ch_id in channel_best}
+        for res in results:
+            if res[1] == highest_ppm:
+                last_revs[res[0]] = float(res[3])
+                
+        for ch_id, last_rev in last_revs.items():
+            if last_rev > 0:
+                expected = math.floor((channel_best[ch_id]['max_rev'] / last_rev) * highest_ppm)
+                if expected > highest_ppm:
+                    expected_next_ppms.append(expected)
+                    
+        if expected_next_ppms:
+            current_global_ppm = min(expected_next_ppms)
+        else:
+            current_global_ppm = highest_ppm + 1
     max_iterations = 20
     
     for iteration in tqdm(range(max_iterations), desc="Optimizing PPM"):
@@ -181,10 +222,10 @@ if __name__ == "__main__":
     # execute only if run as a script
     parser = argparse.ArgumentParser()
     parser.add_argument("--node", type=str, default="03fe8461ebc025880b58021c540e0b7782bb2bcdc99da9822f5c6d2184a59b8f69")
-    parser.add_argument("--start-ppm", type=int, default=1, help="Starting PPM for the iterative optimization")
+    parser.add_argument("--input-csv", type=str, default=None, help="Previous CSV results file to continue from")
     args = parser.parse_args()
     
-    run_centrality_sweep(args.node, args.start_ppm)
+    run_centrality_sweep(args.node, args.input_csv)
 
 
 
