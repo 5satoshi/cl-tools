@@ -76,7 +76,7 @@ def get_graph_from_cli(rpc=".lightning/bitcoin/lightning-rpc"):
     return DG
 
 
-def run_route_finding(number_of_runs, mynode):
+def run_centrality_sweep(max_ppm, mynode):
     
     rpc = os.environ['HOME']+"/.lightning/bitcoin/lightning-rpc"
     G = get_graph_from_cli(rpc)
@@ -99,189 +99,53 @@ def run_route_finding(number_of_runs, mynode):
     e_short_id = DG.edge_properties["short_channel_id"]
     e_satoshis = DG.edge_properties["satoshis"]
     
-    ### set mynode channel fees to zero for G calc 1
-    channels = {}
-    best_fees = {}
+    # Set mynode base fees to 0 to focus strictly on PPM
     for e in mynode_v.out_edges():
-        ch_id = e_short_id[e]
-        channels[v_id[e.target()]] = {
-            'short_id': ch_id,
-            'base_fee': e_base_fee[e],
-            'fee_rate': e_fee_rate[e]
-        }
-        # Pre-populate best_fees with all channels and default values
-        best_fees[ch_id] = {'best_ppm': None, 'actual_ppm': e_fee_rate[e], 'tested': 0}
         e_base_fee[e] = 0
-        e_fee_rate[e] = 0
-    
-    nodes = list(DG.vertices())
-    
-    # --- Centrality Calculations ---
+        
+    results = []
     tx_sat_cent = 80000
+    e_weight = DG.new_edge_property("double")
     
-    # 1. Centrality with mynode fees = 0 (currently set above)
-    e_fee_cent_0 = DG.new_edge_property("double")
-    for e in DG.edges():
-        a = e_base_fee[e]
-        b = e_fee_rate[e] / 1000000.0
-        e_fee_cent_0[e] = math.floor(a + tx_sat_cent * b * 1000)
-        
-    logger.info("Computing betweenness centrality (fees=0)...")
-    _, e_betw_0 = gt.betweenness(DG, weight=e_fee_cent_0)
+    logger.info(f"Starting centrality sweep for PPM 0 to {max_ppm}...")
     
-    for e in mynode_v.out_edges():
-        ch_id = e_short_id[e]
-        best_fees[ch_id]['cent_0'] = e_betw_0[e]
-        
-    # 2. Centrality with mynode ppm = 1
-    for e in mynode_v.out_edges():
-        e_fee_rate[e] = 1
-        
-    e_fee_cent_1 = DG.new_edge_property("double")
-    for e in DG.edges():
-        a = e_base_fee[e]
-        b = e_fee_rate[e] / 1000000.0
-        e_fee_cent_1[e] = math.floor(a + tx_sat_cent * b * 1000)
-        
-    logger.info("Computing betweenness centrality (ppm=1)...")
-    _, e_betw_1 = gt.betweenness(DG, weight=e_fee_cent_1)
-    
-    for e in mynode_v.out_edges():
-        ch_id = e_short_id[e]
-        best_fees[ch_id]['cent_1'] = e_betw_1[e]
-        # Reset back to 0 for the route finding simulations
-        e_fee_rate[e] = 0
-
-    logger.info(f"Starting {number_of_runs} route finding simulations...")
-    
-    for i in tqdm(range(number_of_runs), desc="Simulating routes"):
-        
-        tx_sat = random.randint(1,1000000)
-        
-        i_DG = gt.Graph(DG, prune=True)
-        iv_id = i_DG.vertex_properties["id"]
-        iv_mynode = gt.find_vertex(i_DG, iv_id, mynode)[0]
-        
-        ie_base_fee = i_DG.edge_properties["base_fee_millisatoshi"]
-        ie_fee_rate = i_DG.edge_properties["fee_per_millionth"]
-        ie_satoshis = i_DG.edge_properties["satoshis"]
-        ie_short_id = i_DG.edge_properties["short_channel_id"]
-        
-        e_fee = i_DG.new_edge_property("double")
-        efilt = i_DG.new_edge_property("bool", val=True)
-        
-        # calculate fee per tx size
-        for e in i_DG.edges():
-            if ie_satoshis[e] < 2.5*tx_sat:
-                efilt[e] = False
-            else:
-                a = ie_base_fee[e]
-                b = ie_fee_rate[e]/1000000.0
-                e_fee[e] = math.floor(a + tx_sat*b*1000)
-        
-        i_DG.set_edge_filter(efilt)
-        
-        comp, hist = gt.label_components(i_DG, directed=True)
-        if len(hist) == 0:
-            continue
+    for ppm in tqdm(range(max_ppm + 1), desc="Sweeping PPM"):
+        # Update mynode out-edges PPM
+        for e in mynode_v.out_edges():
+            e_fee_rate[e] = ppm
             
-        mynode_comp = comp[iv_mynode]
-        vfilt = i_DG.new_vertex_property("bool")
-        vfilt.a = (comp.a == mynode_comp)
-        
-        ii_DG = gt.GraphView(i_DG, vfilt=vfilt)
-        
-        ii_mynode_list = gt.find_vertex(ii_DG, iv_id, mynode)
-        if not ii_mynode_list:
-            continue
-        ii_mynode = ii_mynode_list[0]
-        
-        valid_nodes = list(ii_DG.vertices())
-        if len(valid_nodes) < 3:
-            continue
+        # Compute edge weights for the whole graph based on 80k sat tx
+        for e in DG.edges():
+            a = e_base_fee[e]
+            b = e_fee_rate[e] / 1000000.0
+            e_weight[e] = math.floor(a + tx_sat_cent * b * 1000)
             
-        i_i_node_v = valid_nodes[random.randint(0,len(valid_nodes)-1)]
-        ii_dest_node = valid_nodes[random.randint(0,len(valid_nodes)-1)]
+        # Compute betweenness
+        _, e_betw = gt.betweenness(DG, weight=e_weight)
         
-        # Ensure we pick distinct A, B, and neither is mynode
-        while ii_dest_node == i_i_node_v or ii_dest_node == ii_mynode or i_i_node_v == ii_mynode:
-            i_i_node_v = valid_nodes[random.randint(0,len(valid_nodes)-1)]
-            ii_dest_node = valid_nodes[random.randint(0,len(valid_nodes)-1)]
+        # Record results for mynode's channels
+        for e in mynode_v.out_edges():
+            ch_id = e_short_id[e]
+            cent = e_betw[e]
+            results.append([ch_id, ppm, f"{cent:.8f}"])
             
-        i_node = iv_id[i_i_node_v]
-        dest_node = iv_id[ii_dest_node]
-        
-        for e in i_i_node_v.out_edges():
-            e_fee[e] = 0
-        
-        dist_A, pred_A = gt.shortest_distance(ii_DG, source=i_i_node_v, weights=e_fee, pred_map=True)
-        
-        dist_AB = dist_A[ii_dest_node]
-        if dist_AB == float('inf'):
-            continue
-            
-        dist_from_mynode, pred_mynode = gt.shortest_distance(ii_DG, source=ii_mynode, weights=e_fee, pred_map=True)
-        
-        dist_A_mynode = dist_A[ii_mynode]
-        dist_mynode_B = dist_from_mynode[ii_dest_node]
-        
-        # Check if mynode is on a shortest path
-        if math.isclose(dist_AB, dist_A_mynode + dist_mynode_B, rel_tol=1e-9):
-            found_competitive = False
-            
-            # Channel is the first hop after mynode toward destination
-            curr = ii_dest_node
-            while pred_mynode[curr] != ii_mynode:
-                curr = ii_DG.vertex(pred_mynode[curr])
-            
-            channel_info = channels.get(iv_id[curr])
-            if channel_info:
-                channel = channel_info['short_id']
-                
-                # Increment how many times this channel evaluated successfully
-                best_fees[channel]['tested'] += 1
-                
-                i_DG2 = gt.GraphView(ii_DG)
-                vfilt2 = i_DG2.new_vertex_property("bool", val=True)
-                vfilt2[ii_mynode] = False
-                i_DG2.set_vertex_filter(vfilt2)
-                
-                comp_dist = gt.shortest_distance(i_DG2, source=i_i_node_v, weights=e_fee)
-                dist_AB_no_mynode = comp_dist[ii_dest_node]
-                
-                if dist_AB_no_mynode < float('inf'):
-                    max_fee = dist_AB_no_mynode - dist_AB
-                    # ppm = (fee_msat - base_fee) * 1000 / tx_sat
-                    best_ppm = math.floor((max_fee - channel_info['base_fee']) * 1000 / tx_sat)
-                    
-                    if best_fees[channel]['best_ppm'] is None or best_ppm > best_fees[channel]['best_ppm']:
-                        best_fees[channel]['best_ppm'] = best_ppm
-
-    print("\n=== Best PPM vs Actual PPM per Channel ===")
-    csv_file = "route_finder_results.csv"
+    csv_file = "centrality_sweep_results.csv"
     with open(csv_file, mode='w', newline='') as f:
         writer = csv.writer(f)
-        writer.writerow(["Channel", "Tested", "Best_PPM", "Actual_PPM", "Cent_0", "Cent_1"])
+        writer.writerow(["Channel", "PPM", "Edge_Centrality"])
+        writer.writerows(results)
         
-        for ch, data in sorted(best_fees.items()):
-            b_ppm = data['best_ppm'] if data['best_ppm'] is not None else "N/A"
-            c0 = data.get('cent_0', 0.0)
-            c1 = data.get('cent_1', 0.0)
-            
-            print(f"Channel {ch}: Tested = {data['tested']} | Best PPM = {b_ppm} | Actual PPM = {data['actual_ppm']} | Cent(0) = {c0:.6f} | Cent(1) = {c1:.6f}")
-            writer.writerow([ch, data['tested'], b_ppm, data['actual_ppm'], f"{c0:.6f}", f"{c1:.6f}"])
-            
     logger.info(f"Results saved to {csv_file}")
 
 
 if __name__ == "__main__":
     # execute only if run as a script
     parser = argparse.ArgumentParser()
-    parser.add_argument("--runs", type=int, default=2000)
+    parser.add_argument("--max-ppm", type=int, default=50)
     parser.add_argument("--node", type=str, default="03fe8461ebc025880b58021c540e0b7782bb2bcdc99da9822f5c6d2184a59b8f69")
     args = parser.parse_args()
     
-    run_route_finding(args.runs, args.node)
+    run_centrality_sweep(args.max_ppm, args.node)
 
 
 
