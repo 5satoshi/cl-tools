@@ -76,7 +76,7 @@ def get_graph_from_cli(rpc=".lightning/bitcoin/lightning-rpc"):
     return DG
 
 
-def run_centrality_sweep(max_ppm, mynode):
+def run_centrality_sweep(mynode):
     
     rpc = os.environ['HOME']+"/.lightning/bitcoin/lightning-rpc"
     G = get_graph_from_cli(rpc)
@@ -107,9 +107,15 @@ def run_centrality_sweep(max_ppm, mynode):
     tx_sat_cent = 80000
     e_weight = DG.new_edge_property("double")
     
-    logger.info(f"Starting centrality sweep for PPM 0 to {max_ppm}...")
+    # Sweep 1-20, then in steps of 10 up to 100
+    ppm_points = list(range(1, 21)) + [30, 40, 50, 60, 70, 80, 90, 100]
+    logger.info(f"Starting centrality sweep for PPM points: {ppm_points}...")
     
-    for ppm in tqdm(range(max_ppm + 1), desc="Sweeping PPM"):
+    channel_best = {}
+    for e in mynode_v.out_edges():
+        channel_best[e_short_id[e]] = {'best_ppm': 0, 'max_rev': -1.0}
+    
+    for ppm in tqdm(ppm_points, desc="Sweeping PPM"):
         # Update mynode out-edges PPM
         for e in mynode_v.out_edges():
             e_fee_rate[e] = ppm
@@ -127,25 +133,33 @@ def run_centrality_sweep(max_ppm, mynode):
         for e in mynode_v.out_edges():
             ch_id = e_short_id[e]
             cent = e_betw[e]
-            results.append([ch_id, ppm, f"{cent:.8f}"])
+            revenue = cent * ppm
+            results.append([ch_id, ppm, f"{cent:.8f}", f"{revenue:.8f}"])
+            
+            if revenue > channel_best[ch_id]['max_rev']:
+                channel_best[ch_id]['max_rev'] = revenue
+                channel_best[ch_id]['best_ppm'] = ppm
             
     csv_file = "centrality_sweep_results.csv"
     with open(csv_file, mode='w', newline='') as f:
         writer = csv.writer(f)
-        writer.writerow(["Channel", "PPM", "Edge_Centrality"])
+        writer.writerow(["Channel", "PPM", "Edge_Centrality", "Revenue_Potential"])
         writer.writerows(results)
         
     logger.info(f"Results saved to {csv_file}")
+    
+    print("\n=== Optimal Revenue PPM per Channel ===")
+    for ch, data in sorted(channel_best.items()):
+        print(f"Channel {ch}: Optimal PPM = {data['best_ppm']} | Max Revenue Potential = {data['max_rev']:.8f}")
 
 
 if __name__ == "__main__":
     # execute only if run as a script
     parser = argparse.ArgumentParser()
-    parser.add_argument("--max-ppm", type=int, default=50)
     parser.add_argument("--node", type=str, default="03fe8461ebc025880b58021c540e0b7782bb2bcdc99da9822f5c6d2184a59b8f69")
     args = parser.parse_args()
     
-    run_centrality_sweep(args.max_ppm, args.node)
+    run_centrality_sweep(args.node)
 
 
 
