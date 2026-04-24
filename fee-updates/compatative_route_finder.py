@@ -114,6 +114,9 @@ def run_centrality_sweep(mynode):
     channel_best = {}
     for e in mynode_v.out_edges():
         channel_best[e_short_id[e]] = {'best_ppm': 0, 'max_rev': -1.0}
+        
+    global_max_rev = -1.0
+    global_best_ppm = 0
     
     for ppm in tqdm(ppm_points, desc="Sweeping PPM"):
         # Update mynode out-edges PPM
@@ -129,16 +132,22 @@ def run_centrality_sweep(mynode):
         # Compute betweenness
         _, e_betw = gt.betweenness(DG, weight=e_weight)
         
+        total_rev_for_ppm = 0.0
         # Record results for mynode's channels
         for e in mynode_v.out_edges():
             ch_id = e_short_id[e]
             cent = e_betw[e]
             revenue = cent * ppm
+            total_rev_for_ppm += revenue
             results.append([ch_id, ppm, f"{cent:.8f}", f"{revenue:.8f}"])
             
             if revenue > channel_best[ch_id]['max_rev']:
                 channel_best[ch_id]['max_rev'] = revenue
                 channel_best[ch_id]['best_ppm'] = ppm
+                
+        if total_rev_for_ppm > global_max_rev:
+            global_max_rev = total_rev_for_ppm
+            global_best_ppm = ppm
             
     csv_file = "centrality_sweep_results.csv"
     with open(csv_file, mode='w', newline='') as f:
@@ -151,6 +160,8 @@ def run_centrality_sweep(mynode):
     print("\n=== Optimal Revenue PPM per Channel ===")
     for ch, data in sorted(channel_best.items()):
         print(f"Channel {ch}: Optimal PPM = {data['best_ppm']} | Max Revenue Potential = {data['max_rev']:.8f}")
+        
+    print(f"\nTotal Node Revenue is maximized at PPM = {global_best_ppm} (Max Total Revenue Potential = {global_max_rev:.8f})")
 
 
 if __name__ == "__main__":
