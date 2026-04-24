@@ -76,7 +76,7 @@ def get_graph_from_cli(rpc=".lightning/bitcoin/lightning-rpc"):
     return DG
 
 
-def run_centrality_sweep(mynode):
+def run_centrality_sweep(mynode, start_ppm=1):
     
     rpc = os.environ['HOME']+"/.lightning/bitcoin/lightning-rpc"
     G = get_graph_from_cli(rpc)
@@ -112,9 +112,9 @@ def run_centrality_sweep(mynode):
     channel_best = {}
     for e in mynode_v.out_edges():
         ch_id = e_short_id[e]
-        channel_best[ch_id] = {'best_ppm': 1, 'max_rev': -1.0}
+        channel_best[ch_id] = {'best_ppm': start_ppm, 'max_rev': -1.0}
         
-    current_global_ppm = 1
+    current_global_ppm = start_ppm
     max_iterations = 20
     
     for iteration in tqdm(range(max_iterations), desc="Optimizing PPM"):
@@ -181,9 +181,10 @@ if __name__ == "__main__":
     # execute only if run as a script
     parser = argparse.ArgumentParser()
     parser.add_argument("--node", type=str, default="03fe8461ebc025880b58021c540e0b7782bb2bcdc99da9822f5c6d2184a59b8f69")
+    parser.add_argument("--start-ppm", type=int, default=1, help="Starting PPM for the iterative optimization")
     args = parser.parse_args()
     
-    run_centrality_sweep(args.node)
+    run_centrality_sweep(args.node, args.start_ppm)
 
 
 
