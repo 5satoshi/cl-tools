@@ -159,7 +159,7 @@ def run_centrality_sweep(mynode, input_csv=None):
     else:
         logger.info("No input CSV provided or file not found. Starting at PPM 1.")
         
-    max_iterations = 20
+    max_iterations = 10
     
     for iteration in tqdm(range(max_iterations), desc="Optimizing PPM"):
         logger.info(f"Iteration {iteration + 1}/{max_iterations} - Testing global PPM: {current_global_ppm}")
