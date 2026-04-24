@@ -118,6 +118,7 @@ def run_centrality_sweep(mynode):
     max_iterations = 20
     
     for iteration in tqdm(range(max_iterations), desc="Optimizing PPM"):
+        logger.info(f"Iteration {iteration + 1}/{max_iterations} - Testing global PPM: {current_global_ppm}")
         # Update mynode out-edges PPM dynamically using the global PPM
         for e in mynode_v.out_edges():
             e_fee_rate[e] = current_global_ppm
