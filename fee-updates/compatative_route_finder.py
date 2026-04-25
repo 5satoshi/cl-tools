@@ -114,6 +114,7 @@ def run_centrality_sweep(mynode, input_csv=None):
     
     channel_best = {}
     current_ppms = {}
+    locked_channels = set()
     for e in mynode_v.out_edges():
         ch_id = e_short_id[e]
         channel_best[ch_id] = {'best_ppm': 1, 'max_rev': -1.0}
@@ -155,13 +156,12 @@ def run_centrality_sweep(mynode, input_csv=None):
                     else:
                         current_ppms[ch_id] = last_ppm + 1
                 else:
-                    current_ppms[ch_id] = last_ppm + 1
+                    locked_channels.add(ch_id)
+                    current_ppms[ch_id] = channel_best[ch_id]['best_ppm']
     else:
         logger.info("No input CSV provided or file not found. Starting all channels at PPM 1.")
         
     max_iterations = 10
-    
-    locked_channels = set()
     
     for iteration in tqdm(range(max_iterations), desc="Optimizing PPM"):
         logger.info(f"Iteration {iteration + 1}/{max_iterations}")
