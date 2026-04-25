@@ -106,6 +106,9 @@ def run_centrality_sweep(mynode, input_csv=None):
     results = []
     tx_sat_cent = 80000
     e_weight = DG.new_edge_property("double")
+    e_epsilon = DG.new_edge_property("double")
+    for e in DG.edges():
+        e_epsilon[e] = random.uniform(0.0001, 0.00011)
     
     logger.info("Starting dynamic iterative PPM optimization...")
     
@@ -173,7 +176,7 @@ def run_centrality_sweep(mynode, input_csv=None):
         for e in DG.edges():
             a = e_base_fee[e]
             b = e_fee_rate[e] / 1000000.0
-            e_weight[e] = math.floor(a + tx_sat_cent * b * 1000) + random.uniform(0.0001, 0.00011)
+            e_weight[e] = math.floor(a + tx_sat_cent * b * 1000) + e_epsilon[e]
             
         # Compute betweenness
         _, e_betw = gt.betweenness(DG, weight=e_weight)
