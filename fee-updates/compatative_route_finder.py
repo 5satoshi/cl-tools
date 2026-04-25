@@ -113,15 +113,17 @@ def run_centrality_sweep(mynode, input_csv=None):
     logger.info("Starting dynamic iterative PPM optimization...")
     
     channel_best = {}
+    current_ppms = {}
     for e in mynode_v.out_edges():
         ch_id = e_short_id[e]
         channel_best[ch_id] = {'best_ppm': 1, 'max_rev': -1.0}
+        current_ppms[ch_id] = 1
         
-    current_global_ppm = 1
-    
     if input_csv and os.path.exists(input_csv):
         logger.info(f"Loading previous results from {input_csv}...")
-        highest_ppm = 1
+        highest_tested_ppm = {ch: 0 for ch in channel_best}
+        last_revs = {ch: 0.0 for ch in channel_best}
+        
         with open(input_csv, mode='r') as f:
             reader = csv.reader(f)
             header = next(reader, None)
@@ -138,39 +140,33 @@ def run_centrality_sweep(mynode, input_csv=None):
                     if rev > channel_best[ch_id]['max_rev']:
                         channel_best[ch_id]['max_rev'] = rev
                         channel_best[ch_id]['best_ppm'] = ppm
-                
-                if ppm > highest_ppm:
-                    highest_ppm = ppm
-                    
-        # Find the last revenues at highest_ppm to calculate next step
-        expected_next_ppms = []
-        last_revs = {ch_id: 0.0 for ch_id in channel_best}
-        for res in results:
-            if res[1] == highest_ppm and res[0] in channel_best:
-                last_revs[res[0]] = float(res[3])
-                
-        for ch_id, last_rev in last_revs.items():
-            if last_rev > 0:
-                if last_rev < channel_best[ch_id]['max_rev']:
-                    expected = math.ceil((channel_best[ch_id]['max_rev'] / last_rev) * highest_ppm)
-                    expected_next_ppms.append(expected)
+                        
+                    if ppm > highest_tested_ppm[ch_id]:
+                        highest_tested_ppm[ch_id] = ppm
+                        last_revs[ch_id] = rev
+                        
+        for ch_id in channel_best:
+            last_ppm = highest_tested_ppm[ch_id]
+            last_rev = last_revs[ch_id]
+            if last_ppm > 0:
+                if last_rev > 0:
+                    if last_rev < channel_best[ch_id]['max_rev']:
+                        current_ppms[ch_id] = math.ceil((channel_best[ch_id]['max_rev'] / last_rev) * last_ppm)
+                    else:
+                        current_ppms[ch_id] = last_ppm + 1
                 else:
-                    expected_next_ppms.append(highest_ppm + 1)
-                    
-        if expected_next_ppms:
-            current_global_ppm = min(expected_next_ppms)
-        else:
-            current_global_ppm = highest_ppm + 1
+                    current_ppms[ch_id] = last_ppm + 1
     else:
-        logger.info("No input CSV provided or file not found. Starting at PPM 1.")
+        logger.info("No input CSV provided or file not found. Starting all channels at PPM 1.")
         
     max_iterations = 10
     
     for iteration in tqdm(range(max_iterations), desc="Optimizing PPM"):
-        logger.info(f"Iteration {iteration + 1}/{max_iterations} - Testing global PPM: {current_global_ppm}")
-        # Update mynode out-edges PPM dynamically using the global PPM
+        logger.info(f"Iteration {iteration + 1}/{max_iterations}")
+        # Update mynode out-edges PPM dynamically per channel
         for e in mynode_v.out_edges():
-            e_fee_rate[e] = current_global_ppm
+            ch_id = e_short_id[e]
+            e_fee_rate[e] = current_ppms[ch_id]
             
         # Compute edge weights for the whole graph based on 80k sat tx
         for e in DG.edges():
@@ -181,12 +177,10 @@ def run_centrality_sweep(mynode, input_csv=None):
         # Compute betweenness
         _, e_betw = gt.betweenness(DG, weight=e_weight)
         
-        expected_next_ppms = []
-        
-        # Record results and calculate next expected step
+        # Record results and calculate next expected step per channel
         for e in mynode_v.out_edges():
             ch_id = e_short_id[e]
-            ppm = current_global_ppm
+            ppm = current_ppms[ch_id]
             cent = e_betw[e]
             revenue = cent * ppm
             
@@ -201,16 +195,11 @@ def run_centrality_sweep(mynode, input_csv=None):
                 
             if revenue > 0:
                 if is_max:
-                    expected_next_ppms.append(ppm + 1)
+                    current_ppms[ch_id] = ppm + 1
                 else:
-                    expected = math.ceil((channel_best[ch_id]['max_rev'] / revenue) * ppm)
-                    expected_next_ppms.append(expected)
-                
-        # Determine actual next step ensuring we move forward
-        if expected_next_ppms:
-            current_global_ppm = min(expected_next_ppms)
-        else:
-            current_global_ppm += 1
+                    current_ppms[ch_id] = math.ceil((channel_best[ch_id]['max_rev'] / revenue) * ppm)
+            else:
+                current_ppms[ch_id] = ppm + 1
             
     csv_file = "centrality_sweep_results.csv"
     with open(csv_file, mode='w', newline='') as f:
