@@ -149,7 +149,7 @@ def run_centrality_sweep(mynode, input_csv=None):
         for ch_id, last_rev in last_revs.items():
             if last_rev > 0:
                 if last_rev < channel_best[ch_id]['max_rev']:
-                    expected = math.floor((channel_best[ch_id]['max_rev'] / last_rev) * highest_ppm)
+                    expected = math.ceil((channel_best[ch_id]['max_rev'] / last_rev) * highest_ppm)
                     expected_next_ppms.append(expected)
                 else:
                     expected_next_ppms.append(highest_ppm + 1)
@@ -200,7 +200,7 @@ def run_centrality_sweep(mynode, input_csv=None):
                 if is_max:
                     expected_next_ppms.append(ppm + 1)
                 else:
-                    expected = math.floor((channel_best[ch_id]['max_rev'] / revenue) * ppm)
+                    expected = math.ceil((channel_best[ch_id]['max_rev'] / revenue) * ppm)
                     expected_next_ppms.append(expected)
                 
         # Determine actual next step ensuring we move forward
