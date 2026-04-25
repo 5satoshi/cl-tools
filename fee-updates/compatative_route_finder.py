@@ -114,7 +114,6 @@ def run_centrality_sweep(mynode, input_csv=None):
     
     channel_best = {}
     current_ppms = {}
-    locked_channels = set()
     for e in mynode_v.out_edges():
         ch_id = e_short_id[e]
         channel_best[ch_id] = {'best_ppm': 1, 'max_rev': -1.0}
@@ -138,7 +137,7 @@ def run_centrality_sweep(mynode, input_csv=None):
                 results.append([ch_id, ppm, cent_str, rev_str])
                 
                 if ch_id in channel_best:
-                    if rev > channel_best[ch_id]['max_rev']:
+                    if rev > 0 and rev > channel_best[ch_id]['max_rev']:
                         channel_best[ch_id]['max_rev'] = rev
                         channel_best[ch_id]['best_ppm'] = ppm
                         
@@ -156,8 +155,10 @@ def run_centrality_sweep(mynode, input_csv=None):
                     else:
                         current_ppms[ch_id] = last_ppm + 1
                 else:
-                    locked_channels.add(ch_id)
-                    current_ppms[ch_id] = channel_best[ch_id]['best_ppm']
+                    if last_ppm > channel_best[ch_id]['best_ppm']:
+                        current_ppms[ch_id] = channel_best[ch_id]['best_ppm']
+                    else:
+                        current_ppms[ch_id] = max(1, last_ppm - 1)
     else:
         logger.info("No input CSV provided or file not found. Starting all channels at PPM 1.")
         
@@ -190,14 +191,10 @@ def run_centrality_sweep(mynode, input_csv=None):
             
             # Update max revenue
             is_max = False
-            if revenue >= channel_best[ch_id]['max_rev']:
+            if revenue > 0 and revenue >= channel_best[ch_id]['max_rev']:
                 channel_best[ch_id]['max_rev'] = revenue
                 channel_best[ch_id]['best_ppm'] = ppm
                 is_max = True
-                
-            if ch_id in locked_channels:
-                current_ppms[ch_id] = channel_best[ch_id]['best_ppm']
-                continue
 
             if revenue > 0:
                 if is_max:
@@ -205,8 +202,10 @@ def run_centrality_sweep(mynode, input_csv=None):
                 else:
                     current_ppms[ch_id] = math.ceil((channel_best[ch_id]['max_rev'] / revenue) * ppm)
             else:
-                locked_channels.add(ch_id)
-                current_ppms[ch_id] = channel_best[ch_id]['best_ppm']
+                if ppm > channel_best[ch_id]['best_ppm']:
+                    current_ppms[ch_id] = channel_best[ch_id]['best_ppm']
+                else:
+                    current_ppms[ch_id] = max(1, ppm - 1)
             
     csv_file = "centrality_sweep_results.csv"
     with open(csv_file, mode='w', newline='') as f:
