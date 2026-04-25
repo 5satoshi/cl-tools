@@ -173,7 +173,7 @@ def run_centrality_sweep(mynode, input_csv=None):
         for e in DG.edges():
             a = e_base_fee[e]
             b = e_fee_rate[e] / 1000000.0
-            e_weight[e] = math.floor(a + tx_sat_cent * b * 1000)
+            e_weight[e] = math.floor(a + tx_sat_cent * b * 1000) + random.uniform(0, 0.0001)
             
         # Compute betweenness
         _, e_betw = gt.betweenness(DG, weight=e_weight)
