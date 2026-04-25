@@ -161,6 +161,8 @@ def run_centrality_sweep(mynode, input_csv=None):
         
     max_iterations = 10
     
+    locked_channels = set()
+    
     for iteration in tqdm(range(max_iterations), desc="Optimizing PPM"):
         logger.info(f"Iteration {iteration + 1}/{max_iterations}")
         # Update mynode out-edges PPM dynamically per channel
@@ -193,13 +195,18 @@ def run_centrality_sweep(mynode, input_csv=None):
                 channel_best[ch_id]['best_ppm'] = ppm
                 is_max = True
                 
+            if ch_id in locked_channels:
+                current_ppms[ch_id] = channel_best[ch_id]['best_ppm']
+                continue
+
             if revenue > 0:
                 if is_max:
                     current_ppms[ch_id] = ppm + 1
                 else:
                     current_ppms[ch_id] = math.ceil((channel_best[ch_id]['max_rev'] / revenue) * ppm)
             else:
-                current_ppms[ch_id] = ppm + 1
+                locked_channels.add(ch_id)
+                current_ppms[ch_id] = channel_best[ch_id]['best_ppm']
             
     csv_file = "centrality_sweep_results.csv"
     with open(csv_file, mode='w', newline='') as f:
