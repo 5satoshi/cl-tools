@@ -86,7 +86,7 @@ def run_centrality_sweep(mynode, input_csv=None):
         current_ppms[ch_id] = 1
         channel_history[ch_id] = []
         # Initialize Bayesian Optimizer for each channel (search space: 1 to 10000 PPM)
-        optimizers[ch_id] = Optimizer(dimensions=[Integer(1, 10000, prior='log-uniform')], random_state=42)
+        optimizers[ch_id] = Optimizer(dimensions=[Integer(1, 10000, prior='log-uniform')])
         
     start_iteration = 0
     if input_csv and os.path.exists(input_csv):
