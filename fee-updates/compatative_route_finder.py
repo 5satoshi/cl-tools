@@ -10,8 +10,10 @@ import csv
 from skopt import Optimizer
 from skopt.space import Integer
 import numpy as np
+import warnings
 from graph_helper import get_graph_from_cli
 
+warnings.filterwarnings("ignore", message="The objective has been evaluated at point.*")
 
 logging.basicConfig(
     level=logging.INFO,
@@ -131,11 +133,14 @@ def run_centrality_sweep(mynode, input_csv=None):
         for ch_id in current_ppms:
             if channel_history[ch_id]:
                 # Feed past history into the Bayesian optimizer
+                seen_ppms = set()
                 for past_ppm, past_rev in channel_history[ch_id]:
-                    try:
-                        optimizers[ch_id].tell([past_ppm], -past_rev) # Minimize negative revenue
-                    except Exception:
-                        pass
+                    if past_ppm not in seen_ppms:
+                        seen_ppms.add(past_ppm)
+                        try:
+                            optimizers[ch_id].tell([past_ppm], -past_rev) # Minimize negative revenue
+                        except Exception:
+                            pass
                 
                 # Ask the optimizer for the next best PPM to test
                 current_ppms[ch_id] = int(optimizers[ch_id].ask()[0])
