@@ -205,20 +205,20 @@ def run_centrality_sweep(mynode, input_csv=None):
         # Compute betweenness
         _, e_betw = gt.betweenness(DG, weight=e_weight, norm=False)
         
-        sum_cent = 0.0
+        sum_cent = 0
         sum_rev = 0.0
         
         # Record results and calculate gradient-based next step per channel
         for e in mynode_v.out_edges():
             ch_id = e_short_id[e]
             ppm = current_ppms[ch_id]
-            cent = e_betw[e]
-            revenue = max(0.0, cent - 1.0) * ppm
+            cent = int(round(e_betw[e]))
+            revenue = max(0, cent - 1) * ppm
             
             sum_cent += cent
             sum_rev += revenue
             
-            results.append([iteration, ch_id, ppm, f"{cent:.8f}", f"{revenue:.8f}"])
+            results.append([iteration, ch_id, ppm, f"{cent}", f"{revenue:.8f}"])
             channel_history[ch_id].append((ppm, revenue))
             
             # Bayesian Optimization update
@@ -235,7 +235,7 @@ def run_centrality_sweep(mynode, input_csv=None):
             best_total_revenue = sum_rev
             best_iteration = iteration
             
-        logger.info(f"Iteration {iteration + 1} completed | Sum Centrality: {sum_cent:.8f} | Total Revenue: {sum_rev:.8f}")
+        logger.info(f"Iteration {iteration + 1} completed | Sum Centrality: {sum_cent} | Total Revenue: {sum_rev:.8f}")
             
     csv_file = "centrality_sweep_results.csv"
     with open(csv_file, mode='w', newline='') as f:
