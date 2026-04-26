@@ -203,7 +203,7 @@ def run_centrality_sweep(mynode, input_csv=None):
             e_weight[e] = math.floor(a + tx_sat_cent * b * 1000) + e_epsilon[e]
             
         # Compute betweenness
-        _, e_betw = gt.betweenness(DG, weight=e_weight)
+        _, e_betw = gt.betweenness(DG, weight=e_weight, norm=False)
         
         sum_cent = 0.0
         sum_rev = 0.0
@@ -213,7 +213,7 @@ def run_centrality_sweep(mynode, input_csv=None):
             ch_id = e_short_id[e]
             ppm = current_ppms[ch_id]
             cent = e_betw[e]
-            revenue = cent * ppm
+            revenue = max(0.0, cent - 1.0) * ppm
             
             sum_cent += cent
             sum_rev += revenue
