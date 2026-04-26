@@ -81,7 +81,7 @@ def run_centrality_sweep(mynode, input_csv=None):
     
     for e in mynode_v.out_edges():
         ch_id = e_short_id[e]
-        current_ppms[ch_id] = 10000
+        current_ppms[ch_id] = 1
         channel_history[ch_id] = []
         # Initialize Bayesian Optimizer for each channel (search space: 1 to 10000 PPM)
         optimizers[ch_id] = Optimizer(dimensions=[Integer(1, 10000)], random_state=42)
@@ -140,7 +140,7 @@ def run_centrality_sweep(mynode, input_csv=None):
                 # Ask the optimizer for the next best PPM to test
                 current_ppms[ch_id] = int(optimizers[ch_id].ask()[0])
     else:
-        logger.info("No input CSV provided or file not found. Starting all channels at PPM 10000.")
+        logger.info("No input CSV provided or file not found. Starting all channels at PPM 1.")
         
     max_iterations = 10
     
