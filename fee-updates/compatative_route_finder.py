@@ -11,6 +11,7 @@ from skopt import Optimizer
 from skopt.space import Integer
 import numpy as np
 import warnings
+import json
 from graph_helper import get_graph_from_cli
 
 warnings.filterwarnings("ignore", message="The objective has been evaluated at point.*")
@@ -56,20 +57,30 @@ def run_centrality_sweep(mynode, input_csv=None):
     for e in DG.edges():
         e_epsilon[e] = random.uniform(0.0001, 0.00011)
         
-    logger.info("Computing baseline centrality (PPM=1000000) to find non-converging routes...")
+    baseline_file = "baseline_centrality.json"
     baseline_cent = {}
-    for e in mynode_v.out_edges():
-        e_fee_rate[e] = 1000000
-        
-    for e in DG.edges():
-        a = e_base_fee[e]
-        b = e_fee_rate[e] / 1000000.0
-        e_weight[e] = math.floor(a + tx_sat_cent * b * 1000) + e_epsilon[e]
-        
-    _, e_betw_base = gt.betweenness(DG, weight=e_weight, norm=False)
-    for e in mynode_v.out_edges():
-        ch_id = e_short_id[e]
-        baseline_cent[ch_id] = int(round(e_betw_base[e]))
+    
+    if os.path.exists(baseline_file):
+        logger.info(f"Loading baseline centrality from {baseline_file}...")
+        with open(baseline_file, "r") as f:
+            baseline_cent = json.load(f)
+    else:
+        logger.info("Computing baseline centrality (PPM=1000000) to find non-converging routes...")
+        for e in mynode_v.out_edges():
+            e_fee_rate[e] = 1000000
+            
+        for e in DG.edges():
+            a = e_base_fee[e]
+            b = e_fee_rate[e] / 1000000.0
+            e_weight[e] = math.floor(a + tx_sat_cent * b * 1000) + e_epsilon[e]
+            
+        _, e_betw_base = gt.betweenness(DG, weight=e_weight, norm=False)
+        for e in mynode_v.out_edges():
+            ch_id = e_short_id[e]
+            baseline_cent[ch_id] = int(round(e_betw_base[e]))
+            
+        with open(baseline_file, "w") as f:
+            json.dump(baseline_cent, f)
     
     logger.info("Starting dynamic iterative PPM optimization...")
     
