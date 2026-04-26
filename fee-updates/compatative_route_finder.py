@@ -53,6 +53,21 @@ def run_centrality_sweep(mynode, input_csv=None):
     e_epsilon = DG.new_edge_property("double")
     for e in DG.edges():
         e_epsilon[e] = random.uniform(0.0001, 0.00011)
+        
+    logger.info("Computing baseline centrality (PPM=1000000) to find non-converging routes...")
+    baseline_cent = {}
+    for e in mynode_v.out_edges():
+        e_fee_rate[e] = 1000000
+        
+    for e in DG.edges():
+        a = e_base_fee[e]
+        b = e_fee_rate[e] / 1000000.0
+        e_weight[e] = math.floor(a + tx_sat_cent * b * 1000) + e_epsilon[e]
+        
+    _, e_betw_base = gt.betweenness(DG, weight=e_weight, norm=False)
+    for e in mynode_v.out_edges():
+        ch_id = e_short_id[e]
+        baseline_cent[ch_id] = int(round(e_betw_base[e]))
     
     logger.info("Starting dynamic iterative PPM optimization...")
     
@@ -154,7 +169,7 @@ def run_centrality_sweep(mynode, input_csv=None):
             ch_id = e_short_id[e]
             ppm = current_ppms[ch_id]
             cent = int(round(e_betw[e]))
-            revenue = max(0, cent - 1) * ppm
+            revenue = max(0, cent - baseline_cent[ch_id]) * ppm
             
             sum_cent += cent
             sum_rev += revenue
