@@ -119,7 +119,7 @@ def run_centrality_sweep(mynode, input_csv=None):
     channel_history = {}
     optimizers = {}
     
-    best_total_revenue = -1.0
+    best_total_revenue = -1
     best_iteration = -1
     iteration_revenues = {}
     
@@ -153,7 +153,7 @@ def run_centrality_sweep(mynode, input_csv=None):
                     it_num = 0
                     
                 ppm = int(ppm_str)
-                rev = float(rev_str)
+                rev = int(float(rev_str))
                 
                 if has_iteration:
                     results.append([it_num, ch_id, ppm, cent_str, rev_str])
@@ -161,7 +161,7 @@ def run_centrality_sweep(mynode, input_csv=None):
                     results.append([it_num, ch_id, ppm, cent_str, rev_str])
                     
                 if it_num not in iteration_revenues:
-                    iteration_revenues[it_num] = 0.0
+                    iteration_revenues[it_num] = 0
                 iteration_revenues[it_num] += rev
                 
                 if ch_id in current_ppms:
@@ -206,7 +206,7 @@ def run_centrality_sweep(mynode, input_csv=None):
         _, e_betw = gt.betweenness(DG, weight=e_weight, norm=False)
         
         sum_cent = 0
-        sum_rev = 0.0
+        sum_rev = 0
         
         # Record results and calculate gradient-based next step per channel
         for e in mynode_v.out_edges():
@@ -218,7 +218,7 @@ def run_centrality_sweep(mynode, input_csv=None):
             sum_cent += cent
             sum_rev += revenue
             
-            results.append([iteration, ch_id, ppm, f"{cent}", f"{revenue:.8f}"])
+            results.append([iteration, ch_id, ppm, f"{cent}", f"{revenue}"])
             channel_history[ch_id].append((ppm, revenue))
             
             # Bayesian Optimization update
@@ -235,7 +235,7 @@ def run_centrality_sweep(mynode, input_csv=None):
             best_total_revenue = sum_rev
             best_iteration = iteration
             
-        logger.info(f"Iteration {iteration + 1} completed | Sum Centrality: {sum_cent} | Total Revenue: {sum_rev:.8f}")
+        logger.info(f"Iteration {iteration + 1} completed | Sum Centrality: {sum_cent} | Total Revenue: {sum_rev}")
             
     csv_file = "centrality_sweep_results.csv"
     with open(csv_file, mode='w', newline='') as f:
@@ -245,7 +245,7 @@ def run_centrality_sweep(mynode, input_csv=None):
         
     logger.info(f"Results saved to {csv_file}")
     
-    print(f"\n=== Best overall Total Revenue of {best_total_revenue:.8f} was achieved at Iteration {best_iteration} (Internal Index) ===")
+    print(f"\n=== Best overall Total Revenue of {best_total_revenue} was achieved at Iteration {best_iteration} (Internal Index) ===")
 
 
 if __name__ == "__main__":
