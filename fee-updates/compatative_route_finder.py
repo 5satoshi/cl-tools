@@ -9,6 +9,9 @@ from datetime import datetime
 import argparse
 from tqdm import tqdm
 import csv
+from skopt import Optimizer
+from skopt.space import Integer
+import numpy as np
 
 
 logging.basicConfig(
@@ -114,6 +117,7 @@ def run_centrality_sweep(mynode, input_csv=None):
     
     current_ppms = {}
     channel_history = {}
+    optimizers = {}
     
     best_total_revenue = -1.0
     best_iteration = -1
@@ -123,6 +127,8 @@ def run_centrality_sweep(mynode, input_csv=None):
         ch_id = e_short_id[e]
         current_ppms[ch_id] = 1
         channel_history[ch_id] = []
+        # Initialize Bayesian Optimizer for each channel (search space: 1 to 1000 PPM)
+        optimizers[ch_id] = Optimizer(dimensions=[Integer(1, 1000)], random_state=42)
         
     start_iteration = 0
     if input_csv and os.path.exists(input_csv):
@@ -168,8 +174,15 @@ def run_centrality_sweep(mynode, input_csv=None):
 
         for ch_id in current_ppms:
             if channel_history[ch_id]:
-                last_ppm, last_rev = channel_history[ch_id][-1]
-                current_ppms[ch_id] = last_ppm
+                # Feed past history into the Bayesian optimizer
+                for past_ppm, past_rev in channel_history[ch_id]:
+                    try:
+                        optimizers[ch_id].tell([past_ppm], -past_rev) # Minimize negative revenue
+                    except Exception:
+                        pass
+                
+                # Ask the optimizer for the next best PPM to test
+                current_ppms[ch_id] = int(optimizers[ch_id].ask()[0])
     else:
         logger.info("No input CSV provided or file not found. Starting all channels at PPM 1.")
         
@@ -208,30 +221,14 @@ def run_centrality_sweep(mynode, input_csv=None):
             results.append([iteration, ch_id, ppm, f"{cent:.8f}", f"{revenue:.8f}"])
             channel_history[ch_id].append((ppm, revenue))
             
-            # Gradient Ascent / Secant update
-            if len(channel_history[ch_id]) < 2:
+            # Bayesian Optimization update
+            try:
+                optimizers[ch_id].tell([ppm], -revenue)  # Minimize negative revenue
+                next_ppm = int(optimizers[ch_id].ask()[0])
+            except Exception as e:
+                logger.error(f"Optimizer error for channel {ch_id}: {e}. Falling back to +1 step.")
                 next_ppm = ppm + 1
-            else:
-                ppm1, rev1 = channel_history[ch_id][-2]
-                ppm2, rev2 = channel_history[ch_id][-1]
                 
-                dp = ppm2 - ppm1
-                dr = rev2 - rev1
-                
-                if dp == 0:
-                    next_ppm = ppm + 1 if rev2 > 0 else max(1, ppm - 1)
-                else:
-                    grad = dr / dp
-                    step = int(round(1.0 * grad))
-                    step = max(-10, min(10, step)) # Clamp max step size
-                    
-                    if grad > 0 and step == 0:
-                        step = 1
-                    elif grad < 0 and step == 0:
-                        step = -1
-                        
-                    next_ppm = max(1, ppm2 + step)
-                    
             current_ppms[ch_id] = next_ppm
             
         if sum_rev > best_total_revenue:
