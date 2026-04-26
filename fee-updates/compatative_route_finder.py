@@ -11,7 +11,6 @@ from skopt import Optimizer
 from skopt.space import Integer
 import numpy as np
 import warnings
-import json
 from graph_helper import get_graph_from_cli
 
 warnings.filterwarnings("ignore", message="The objective has been evaluated at point.*")
@@ -57,33 +56,9 @@ def run_centrality_sweep(mynode, input_csv=None):
     for e in DG.edges():
         e_epsilon[e] = random.uniform(0.0001, 0.00011)
         
-    baseline_file = "baseline_centrality.json"
+    logger.info("Initializing dynamic iterative PPM optimization...")
+    
     baseline_cent = {}
-    
-    if os.path.exists(baseline_file):
-        logger.info(f"Loading baseline centrality from {baseline_file}...")
-        with open(baseline_file, "r") as f:
-            baseline_cent = json.load(f)
-    else:
-        logger.info("Computing baseline centrality (PPM=1000000) to find non-converging routes...")
-        for e in mynode_v.out_edges():
-            e_fee_rate[e] = 1000000
-            
-        for e in DG.edges():
-            a = e_base_fee[e]
-            b = e_fee_rate[e] / 1000000.0
-            e_weight[e] = math.floor(a + tx_sat_cent * b * 1000) + e_epsilon[e]
-            
-        _, e_betw_base = gt.betweenness(DG, weight=e_weight, norm=False)
-        for e in mynode_v.out_edges():
-            ch_id = e_short_id[e]
-            baseline_cent[ch_id] = int(round(e_betw_base[e]))
-            
-        with open(baseline_file, "w") as f:
-            json.dump(baseline_cent, f)
-    
-    logger.info("Starting dynamic iterative PPM optimization...")
-    
     current_ppms = {}
     channel_history = {}
     optimizers = {}
@@ -116,18 +91,24 @@ def run_centrality_sweep(mynode, input_csv=None):
                 if has_iteration and len(row) >= 5:
                     it_str, ch_id, ppm_str, cent_str, rev_str = row
                     it_num = int(it_str)
-                    start_iteration = max(start_iteration, it_num + 1)
+                    if it_num >= 0:
+                        start_iteration = max(start_iteration, it_num + 1)
                 else:
                     ch_id, ppm_str, cent_str, rev_str = row
                     it_num = 0
                     
                 ppm = int(ppm_str)
+                cent = int(cent_str)
                 rev = int(float(rev_str))
                 
                 if has_iteration:
                     results.append([it_num, ch_id, ppm, cent_str, rev_str])
                 else:
                     results.append([it_num, ch_id, ppm, cent_str, rev_str])
+                    
+                if it_num == -1:
+                    baseline_cent[ch_id] = cent
+                    continue
                     
                 if it_num not in iteration_revenues:
                     iteration_revenues[it_num] = 0
@@ -157,6 +138,29 @@ def run_centrality_sweep(mynode, input_csv=None):
                 current_ppms[ch_id] = int(optimizers[ch_id].ask()[0])
     else:
         logger.info("No input CSV provided or file not found. Starting all channels at PPM 1.")
+        
+    needs_baseline = False
+    for e in mynode_v.out_edges():
+        if e_short_id[e] not in baseline_cent:
+            needs_baseline = True
+            break
+            
+    if needs_baseline:
+        logger.info("Computing baseline centrality (PPM=1000000) to find non-converging routes...")
+        for e in mynode_v.out_edges():
+            e_fee_rate[e] = 1000000
+            
+        for e in DG.edges():
+            a = e_base_fee[e]
+            b = e_fee_rate[e] / 1000000.0
+            e_weight[e] = math.floor(a + tx_sat_cent * b * 1000) + e_epsilon[e]
+            
+        _, e_betw_base = gt.betweenness(DG, weight=e_weight, norm=False)
+        for e in mynode_v.out_edges():
+            ch_id = e_short_id[e]
+            cent = int(round(e_betw_base[e]))
+            baseline_cent[ch_id] = cent
+            results.append([-1, ch_id, 1000000, f"{cent}", "0"])
         
     max_iterations = 10
     
