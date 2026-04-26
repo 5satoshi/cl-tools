@@ -116,6 +116,10 @@ def run_centrality_sweep(mynode, input_csv=None):
     current_ppms = {}
     channel_history = {}
     
+    best_total_revenue = -1.0
+    best_iteration = -1
+    iteration_revenues = {}
+    
     for e in mynode_v.out_edges():
         ch_id = e_short_id[e]
         channel_best[ch_id] = {'best_ppm': 1, 'max_rev': -1.0}
@@ -151,6 +155,10 @@ def run_centrality_sweep(mynode, input_csv=None):
                     results.append([it_num, ch_id, ppm, cent_str, rev_str])
                 else:
                     results.append([it_num, ch_id, ppm, cent_str, rev_str])
+                    
+                if it_num not in iteration_revenues:
+                    iteration_revenues[it_num] = 0.0
+                iteration_revenues[it_num] += rev
                 
                 if ch_id in channel_best:
                     channel_history[ch_id].append((ppm, rev))
@@ -158,6 +166,11 @@ def run_centrality_sweep(mynode, input_csv=None):
                         channel_best[ch_id]['max_rev'] = rev
                         channel_best[ch_id]['best_ppm'] = ppm
                         
+        for it_n, tot_rev in iteration_revenues.items():
+            if tot_rev > best_total_revenue:
+                best_total_revenue = tot_rev
+                best_iteration = it_n
+
         for ch_id in channel_best:
             if channel_history[ch_id]:
                 last_ppm, last_rev = channel_history[ch_id][-1]
@@ -230,6 +243,10 @@ def run_centrality_sweep(mynode, input_csv=None):
                     
             current_ppms[ch_id] = next_ppm
             
+        if sum_rev > best_total_revenue:
+            best_total_revenue = sum_rev
+            best_iteration = iteration
+            
         logger.info(f"Iteration {iteration + 1} completed | Sum Centrality: {sum_cent:.8f} | Total Revenue: {sum_rev:.8f}")
             
     csv_file = "centrality_sweep_results.csv"
@@ -248,6 +265,7 @@ def run_centrality_sweep(mynode, input_csv=None):
             total_opt_revenue += data['max_rev']
             
     print(f"\nTotal Node Revenue Potential across optimized channels = {total_opt_revenue:.8f}")
+    print(f"\nBest overall Total Revenue of {best_total_revenue:.8f} was achieved at Iteration {best_iteration} (Internal Index)")
 
 
 if __name__ == "__main__":
