@@ -2,9 +2,7 @@
 
 import sys, math, os, random, logging
 import graph_tool.all as gt
-import pandas as pd
 import matplotlib.pyplot as plt
-from pyln.client import LightningRpc
 from datetime import datetime
 import argparse
 from tqdm import tqdm
@@ -12,6 +10,7 @@ import csv
 from skopt import Optimizer
 from skopt.space import Integer
 import numpy as np
+from graph_helper import get_graph_from_cli
 
 
 logging.basicConfig(
@@ -19,64 +18,6 @@ logging.basicConfig(
     format="%(asctime)s | %(levelname)s | %(name)s | %(message)s"
 )
 logger = logging.getLogger("RouteFinder")
-
-
-def get_graph_from_cli(rpc=".lightning/bitcoin/lightning-rpc"):
-    
-    l1 = LightningRpc(rpc)
-    
-    channels = l1.listchannels()
-    
-    dfc = pd.DataFrame(channels["channels"])
-    
-    DG = gt.Graph(directed=True)
-    v_id = DG.new_vertex_property("string")
-    DG.vertex_properties["id"] = v_id
-    
-    e_active = DG.new_edge_property("bool")
-    e_base_fee = DG.new_edge_property("double")
-    e_fee_rate = DG.new_edge_property("double")
-    e_satoshis = DG.new_edge_property("double")
-    e_short_id = DG.new_edge_property("string")
-    
-    DG.edge_properties["active"] = e_active
-    DG.edge_properties["base_fee_millisatoshi"] = e_base_fee
-    DG.edge_properties["fee_per_millionth"] = e_fee_rate
-    DG.edge_properties["satoshis"] = e_satoshis
-    DG.edge_properties["short_channel_id"] = e_short_id
-
-    vertex_map = {}
-    for _, row in dfc.iterrows():
-        u_id = row['source']
-        v_id_str = row['destination']
-        
-        if u_id not in vertex_map:
-            v = DG.add_vertex()
-            v_id[v] = u_id
-            vertex_map[u_id] = v
-        if v_id_str not in vertex_map:
-            v = DG.add_vertex()
-            v_id[v] = v_id_str
-            vertex_map[v_id_str] = v
-            
-        e = DG.add_edge(vertex_map[u_id], vertex_map[v_id_str])
-        e_active[e] = row['active']
-        e_base_fee[e] = row['base_fee_millisatoshi']
-        e_fee_rate[e] = row['fee_per_millionth']
-        
-        # Handle newer CLN versions that use amount_msat instead of satoshis
-        amt_msat = row.get('amount_msat', 0)
-        if isinstance(amt_msat, str) and amt_msat.endswith('msat'):
-            amt_msat = int(amt_msat[:-4])
-        elif isinstance(amt_msat, dict) and 'msat' in amt_msat:
-            amt_msat = amt_msat['msat']
-        
-        sat = row.get('satoshis', amt_msat / 1000.0)
-        e_satoshis[e] = float(sat)
-        
-        e_short_id[e] = row['short_channel_id']
-    
-    return DG
 
 
 def run_centrality_sweep(mynode, input_csv=None):
