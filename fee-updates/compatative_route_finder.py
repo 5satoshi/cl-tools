@@ -112,7 +112,6 @@ def run_centrality_sweep(mynode, input_csv=None):
     
     logger.info("Starting dynamic iterative PPM optimization...")
     
-    channel_best = {}
     current_ppms = {}
     channel_history = {}
     
@@ -122,7 +121,6 @@ def run_centrality_sweep(mynode, input_csv=None):
     
     for e in mynode_v.out_edges():
         ch_id = e_short_id[e]
-        channel_best[ch_id] = {'best_ppm': 1, 'max_rev': -1.0}
         current_ppms[ch_id] = 1
         channel_history[ch_id] = []
         
@@ -160,18 +158,15 @@ def run_centrality_sweep(mynode, input_csv=None):
                     iteration_revenues[it_num] = 0.0
                 iteration_revenues[it_num] += rev
                 
-                if ch_id in channel_best:
+                if ch_id in current_ppms:
                     channel_history[ch_id].append((ppm, rev))
-                    if rev > 0 and rev > channel_best[ch_id]['max_rev']:
-                        channel_best[ch_id]['max_rev'] = rev
-                        channel_best[ch_id]['best_ppm'] = ppm
                         
         for it_n, tot_rev in iteration_revenues.items():
             if tot_rev > best_total_revenue:
                 best_total_revenue = tot_rev
                 best_iteration = it_n
 
-        for ch_id in channel_best:
+        for ch_id in current_ppms:
             if channel_history[ch_id]:
                 last_ppm, last_rev = channel_history[ch_id][-1]
                 current_ppms[ch_id] = last_ppm
@@ -213,10 +208,6 @@ def run_centrality_sweep(mynode, input_csv=None):
             results.append([iteration, ch_id, ppm, f"{cent:.8f}", f"{revenue:.8f}"])
             channel_history[ch_id].append((ppm, revenue))
             
-            if revenue > 0 and revenue >= channel_best[ch_id]['max_rev']:
-                channel_best[ch_id]['max_rev'] = revenue
-                channel_best[ch_id]['best_ppm'] = ppm
-                
             # Gradient Ascent / Secant update
             if len(channel_history[ch_id]) < 2:
                 next_ppm = ppm + 1
@@ -257,15 +248,7 @@ def run_centrality_sweep(mynode, input_csv=None):
         
     logger.info(f"Results saved to {csv_file}")
     
-    print("\n=== Optimal Revenue PPM per Channel ===")
-    total_opt_revenue = 0.0
-    for ch, data in sorted(channel_best.items()):
-        print(f"Channel {ch}: Optimal PPM = {data['best_ppm']} | Max Revenue Potential = {data['max_rev']:.8f}")
-        if data['max_rev'] > 0:
-            total_opt_revenue += data['max_rev']
-            
-    print(f"\nTotal Node Revenue Potential across optimized channels = {total_opt_revenue:.8f}")
-    print(f"\nBest overall Total Revenue of {best_total_revenue:.8f} was achieved at Iteration {best_iteration} (Internal Index)")
+    print(f"\n=== Best overall Total Revenue of {best_total_revenue:.8f} was achieved at Iteration {best_iteration} (Internal Index) ===")
 
 
 if __name__ == "__main__":
