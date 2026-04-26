@@ -114,58 +114,62 @@ def run_centrality_sweep(mynode, input_csv=None):
     
     channel_best = {}
     current_ppms = {}
+    channel_history = {}
+    
     for e in mynode_v.out_edges():
         ch_id = e_short_id[e]
         channel_best[ch_id] = {'best_ppm': 1, 'max_rev': -1.0}
         current_ppms[ch_id] = 1
+        channel_history[ch_id] = []
         
+    start_iteration = 0
     if input_csv and os.path.exists(input_csv):
         logger.info(f"Loading previous results from {input_csv}...")
-        highest_tested_ppm = {ch: 0 for ch in channel_best}
-        last_revs = {ch: 0.0 for ch in channel_best}
         
         with open(input_csv, mode='r') as f:
             reader = csv.reader(f)
             header = next(reader, None)
+            
+            has_iteration = header and "Iteration" in header
+            
             for row in reader:
                 if not row or len(row) < 4:
                     continue
-                ch_id, ppm_str, cent_str, rev_str = row
+                    
+                if has_iteration and len(row) >= 5:
+                    it_str, ch_id, ppm_str, cent_str, rev_str = row
+                    it_num = int(it_str)
+                    start_iteration = max(start_iteration, it_num + 1)
+                else:
+                    ch_id, ppm_str, cent_str, rev_str = row
+                    it_num = 0
+                    
                 ppm = int(ppm_str)
                 rev = float(rev_str)
                 
-                results.append([ch_id, ppm, cent_str, rev_str])
+                if has_iteration:
+                    results.append([it_num, ch_id, ppm, cent_str, rev_str])
+                else:
+                    results.append([it_num, ch_id, ppm, cent_str, rev_str])
                 
                 if ch_id in channel_best:
+                    channel_history[ch_id].append((ppm, rev))
                     if rev > 0 and rev > channel_best[ch_id]['max_rev']:
                         channel_best[ch_id]['max_rev'] = rev
                         channel_best[ch_id]['best_ppm'] = ppm
                         
-                    if ppm > highest_tested_ppm[ch_id]:
-                        highest_tested_ppm[ch_id] = ppm
-                        last_revs[ch_id] = rev
-                        
         for ch_id in channel_best:
-            last_ppm = highest_tested_ppm[ch_id]
-            last_rev = last_revs[ch_id]
-            if last_ppm > 0:
-                if last_rev > 0:
-                    if last_rev < channel_best[ch_id]['max_rev']:
-                        current_ppms[ch_id] = math.ceil((channel_best[ch_id]['max_rev'] / last_rev) * last_ppm)
-                    else:
-                        current_ppms[ch_id] = last_ppm + 1
-                else:
-                    if last_ppm > channel_best[ch_id]['best_ppm']:
-                        current_ppms[ch_id] = channel_best[ch_id]['best_ppm']
-                    else:
-                        current_ppms[ch_id] = max(1, last_ppm - 1)
+            if channel_history[ch_id]:
+                last_ppm, last_rev = channel_history[ch_id][-1]
+                current_ppms[ch_id] = last_ppm
     else:
         logger.info("No input CSV provided or file not found. Starting all channels at PPM 1.")
         
     max_iterations = 10
     
-    for iteration in tqdm(range(max_iterations), desc="Optimizing PPM"):
-        logger.info(f"Iteration {iteration + 1}/{max_iterations}")
+    for iteration in tqdm(range(start_iteration, start_iteration + max_iterations), desc="Optimizing PPM"):
+        logger.info(f"Iteration {iteration + 1} (Total steps)")
+        
         # Update mynode out-edges PPM dynamically per channel
         for e in mynode_v.out_edges():
             ch_id = e_short_id[e]
@@ -180,37 +184,58 @@ def run_centrality_sweep(mynode, input_csv=None):
         # Compute betweenness
         _, e_betw = gt.betweenness(DG, weight=e_weight)
         
-        # Record results and calculate next expected step per channel
+        sum_cent = 0.0
+        sum_rev = 0.0
+        
+        # Record results and calculate gradient-based next step per channel
         for e in mynode_v.out_edges():
             ch_id = e_short_id[e]
             ppm = current_ppms[ch_id]
             cent = e_betw[e]
             revenue = cent * ppm
             
-            results.append([ch_id, ppm, f"{cent:.8f}", f"{revenue:.8f}"])
+            sum_cent += cent
+            sum_rev += revenue
             
-            # Update max revenue
-            is_max = False
+            results.append([iteration, ch_id, ppm, f"{cent:.8f}", f"{revenue:.8f}"])
+            channel_history[ch_id].append((ppm, revenue))
+            
             if revenue > 0 and revenue >= channel_best[ch_id]['max_rev']:
                 channel_best[ch_id]['max_rev'] = revenue
                 channel_best[ch_id]['best_ppm'] = ppm
-                is_max = True
-
-            if revenue > 0:
-                if is_max:
-                    current_ppms[ch_id] = ppm + 1
-                else:
-                    current_ppms[ch_id] = math.ceil((channel_best[ch_id]['max_rev'] / revenue) * ppm)
+                
+            # Gradient Ascent / Secant update
+            if len(channel_history[ch_id]) < 2:
+                next_ppm = ppm + 1
             else:
-                if ppm > channel_best[ch_id]['best_ppm']:
-                    current_ppms[ch_id] = channel_best[ch_id]['best_ppm']
+                ppm1, rev1 = channel_history[ch_id][-2]
+                ppm2, rev2 = channel_history[ch_id][-1]
+                
+                dp = ppm2 - ppm1
+                dr = rev2 - rev1
+                
+                if dp == 0:
+                    next_ppm = ppm + 1 if rev2 > 0 else max(1, ppm - 1)
                 else:
-                    current_ppms[ch_id] = max(1, ppm - 1)
+                    grad = dr / dp
+                    step = int(round(1.0 * grad))
+                    step = max(-10, min(10, step)) # Clamp max step size
+                    
+                    if grad > 0 and step == 0:
+                        step = 1
+                    elif grad < 0 and step == 0:
+                        step = -1
+                        
+                    next_ppm = max(1, ppm2 + step)
+                    
+            current_ppms[ch_id] = next_ppm
+            
+        logger.info(f"Iteration {iteration + 1} completed | Sum Centrality: {sum_cent:.8f} | Total Revenue: {sum_rev:.8f}")
             
     csv_file = "centrality_sweep_results.csv"
     with open(csv_file, mode='w', newline='') as f:
         writer = csv.writer(f)
-        writer.writerow(["Channel", "PPM", "Edge_Centrality", "Revenue_Potential"])
+        writer.writerow(["Iteration", "Channel", "PPM", "Edge_Centrality", "Revenue_Potential"])
         writer.writerows(results)
         
     logger.info(f"Results saved to {csv_file}")
