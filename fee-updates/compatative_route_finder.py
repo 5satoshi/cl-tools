@@ -71,6 +71,8 @@ def run_centrality_sweep(mynode, input_csv=None):
         current_ppms[ch_id] = 1
         channel_history[ch_id] = []
         
+    channel_bounds = {}
+    
     start_iteration = 0
     if input_csv and os.path.exists(input_csv):
         logger.info(f"Loading previous results from {input_csv}...")
@@ -116,14 +118,14 @@ def run_centrality_sweep(mynode, input_csv=None):
                 best_iteration = it_n
 
         for ch_id in current_ppms:
-            upper_bound = 100
+            channel_bounds[ch_id] = 2
             if channel_history[ch_id]:
                 max_ppm_with_rev = max([ppm for ppm, rev in channel_history[ch_id] if rev > 0] + [0])
                 if max_ppm_with_rev > 0:
-                    upper_bound = max(2, 2 * max_ppm_with_rev)
+                    channel_bounds[ch_id] = max(2, max_ppm_with_rev + 1)
                     
             optimizers[ch_id] = Optimizer(
-                dimensions=[Integer(1, upper_bound, prior='log-uniform')],
+                dimensions=[Integer(1, channel_bounds[ch_id], prior='log-uniform')],
                 base_estimator="RF"
             )
             
@@ -131,7 +133,7 @@ def run_centrality_sweep(mynode, input_csv=None):
                 # Feed past history into the Bayesian optimizer
                 seen_ppms = set()
                 for past_ppm, past_rev in channel_history[ch_id]:
-                    if past_ppm not in seen_ppms and past_ppm <= upper_bound:
+                    if past_ppm not in seen_ppms and past_ppm <= channel_bounds[ch_id]:
                         seen_ppms.add(past_ppm)
                         try:
                             optimizers[ch_id].tell([past_ppm], -past_rev) # Minimize negative revenue
@@ -143,8 +145,9 @@ def run_centrality_sweep(mynode, input_csv=None):
     else:
         logger.info("No input CSV provided or file not found. Starting all channels at PPM 1.")
         for ch_id in current_ppms:
+            channel_bounds[ch_id] = 2
             optimizers[ch_id] = Optimizer(
-                dimensions=[Integer(1, 100, prior='log-uniform')],
+                dimensions=[Integer(1, channel_bounds[ch_id], prior='log-uniform')],
                 base_estimator="RF"
             )
         
@@ -183,9 +186,26 @@ def run_centrality_sweep(mynode, input_csv=None):
             results.append([iteration, ch_id, ppm, f"{cent}", f"{revenue}"])
             channel_history[ch_id].append((ppm, revenue))
             
-            # Bayesian Optimization update
+            if cent > 0:
+                channel_bounds[ch_id] += 1
+            
+            # Recreate optimizer to apply dynamic boundaries
+            optimizers[ch_id] = Optimizer(
+                dimensions=[Integer(1, channel_bounds[ch_id], prior='log-uniform')],
+                base_estimator="RF"
+            )
+            
+            # Feed past history into the new Bayesian optimizer
+            seen_ppms = set()
+            for past_ppm, past_rev in channel_history[ch_id]:
+                if past_ppm not in seen_ppms and past_ppm <= channel_bounds[ch_id]:
+                    seen_ppms.add(past_ppm)
+                    try:
+                        optimizers[ch_id].tell([past_ppm], -past_rev)
+                    except Exception:
+                        pass
+            
             try:
-                optimizers[ch_id].tell([ppm], -revenue)  # Minimize negative revenue
                 next_ppm = int(optimizers[ch_id].ask()[0])
             except Exception as e:
                 logger.error(f"Optimizer error for channel {ch_id}: {e}. Falling back to +1 step.")
@@ -197,7 +217,9 @@ def run_centrality_sweep(mynode, input_csv=None):
             best_total_revenue = sum_rev
             best_iteration = iteration
             
+        bounds_str = " | ".join([f"{ch_id}: {channel_bounds[ch_id]}" for ch_id in mynode_v.out_edges() for ch_id in [e_short_id[ch_id]]])
         logger.info(f"Iteration {iteration + 1} completed | Sum Centrality: {sum_cent} | Total Revenue: {sum_rev}")
+        logger.info(f"Current PPM Max Bounds -> {bounds_str}")
             
     csv_file = "centrality_sweep_results.csv"
     with open(csv_file, mode='w', newline='') as f:
