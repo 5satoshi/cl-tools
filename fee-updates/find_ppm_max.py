@@ -94,6 +94,8 @@ def run_ppm_max_search(mynode):
 
             cent = int(round(e_betw[e]))
             has_revenue = cent > baseline_cent[ch_id]
+            
+            tested_ppm = s['ppm']
 
             if s['mode'] == 'exp':
                 if has_revenue:
@@ -122,6 +124,8 @@ def run_ppm_max_search(mynode):
                     s['ppm'] = s['max_valid']
                 else:
                     s['ppm'] = (s['lower'] + s['upper']) // 2
+                    
+            logger.info(f"Ch {ch_id} | Tested PPM: {tested_ppm} | Cent: {cent} | Has Rev: {has_revenue} -> Next Mode: {s['mode']} | Next PPM: {s['ppm']}")
 
     results = {ch_id: s['max_valid'] for ch_id, s in states.items()}
     output_file = "ppm_max.json"
