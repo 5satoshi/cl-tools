@@ -54,63 +54,76 @@ def run_ppm_max_search(mynode):
         ch_id = e_short_id[e]
         baseline_cent[ch_id] = int(round(e_betw_base[e]))
 
-    results = {}
-    
-    for target_e in mynode_v.out_edges():
-        target_ch_id = e_short_id[target_e]
-        logger.info(f"Finding ppm_max for channel {target_ch_id}...")
-        
-        # Keep all other channels at 0 PPM during this channel's search
+    # Initialize search state for all channels simultaneously
+    states = {}
+    for e in mynode_v.out_edges():
+        ch_id = e_short_id[e]
+        states[ch_id] = {
+            'mode': 'exp',
+            'ppm': 1,
+            'lower': 0,
+            'upper': None,
+            'max_valid': 0
+        }
+
+    iteration = 0
+    while True:
+        active_channels = [ch for ch, s in states.items() if s['mode'] != 'done']
+        if not active_channels:
+            break
+
+        iteration += 1
+        logger.info(f"Iteration {iteration}: {len(active_channels)} channels still searching...")
+
         for e in mynode_v.out_edges():
-            e_fee_rate[e] = 0
+            ch_id = e_short_id[e]
+            e_fee_rate[e] = states[ch_id]['ppm']
             
-        mode = 'exp'
-        ppm = 1
-        lower = 0
-        upper = None
-        max_valid = 0
-        
-        while mode != 'done':
-            e_fee_rate[target_e] = ppm
+        for e in DG.edges():
+            a = e_base_fee[e]
+            b = e_fee_rate[e] / 1000000.0
+            e_weight[e] = math.floor(a + tx_sat_cent * b * 1000) + e_epsilon[e]
             
-            for e in DG.edges():
-                a = e_base_fee[e]
-                b = e_fee_rate[e] / 1000000.0
-                e_weight[e] = math.floor(a + tx_sat_cent * b * 1000) + e_epsilon[e]
-                
-            _, e_betw = gt.betweenness(DG, weight=e_weight, norm=False)
-            
-            cent = int(round(e_betw[target_e]))
-            has_revenue = cent > baseline_cent[target_ch_id]
-            
-            if mode == 'exp':
+        _, e_betw = gt.betweenness(DG, weight=e_weight, norm=False)
+
+        for e in mynode_v.out_edges():
+            ch_id = e_short_id[e]
+            s = states[ch_id]
+            if s['mode'] == 'done':
+                continue
+
+            cent = int(round(e_betw[e]))
+            has_revenue = cent > baseline_cent[ch_id]
+
+            if s['mode'] == 'exp':
                 if has_revenue:
-                    max_valid = ppm
-                    lower = ppm
-                    ppm *= 2
-                    if ppm > 1000000:  # Safety cap
-                        mode = 'done'
+                    s['max_valid'] = s['ppm']
+                    s['lower'] = s['ppm']
+                    s['ppm'] *= 2
+                    if s['ppm'] > 1000000:  # Safety cap
+                        s['mode'] = 'done'
                 else:
-                    upper = ppm
-                    mode = 'bin'
-                    if upper - lower <= 1:
-                        mode = 'done'
+                    s['upper'] = s['ppm']
+                    s['mode'] = 'bin'
+                    if s['upper'] - s['lower'] <= 1:
+                        s['mode'] = 'done'
+                        s['ppm'] = s['max_valid']
                     else:
-                        ppm = (lower + upper) // 2
-            elif mode == 'bin':
+                        s['ppm'] = (s['lower'] + s['upper']) // 2
+            elif s['mode'] == 'bin':
                 if has_revenue:
-                    max_valid = ppm
-                    lower = ppm
+                    s['max_valid'] = s['ppm']
+                    s['lower'] = s['ppm']
                 else:
-                    upper = ppm
+                    s['upper'] = s['ppm']
                     
-                if upper - lower <= 1:
-                    mode = 'done'
+                if s['upper'] - s['lower'] <= 1:
+                    s['mode'] = 'done'
+                    s['ppm'] = s['max_valid']
                 else:
-                    ppm = (lower + upper) // 2
-                    
-        results[target_ch_id] = max_valid
-        logger.info(f"Channel {target_ch_id} ppm_max = {max_valid}")
+                    s['ppm'] = (s['lower'] + s['upper']) // 2
+
+    results = {ch_id: s['max_valid'] for ch_id, s in states.items()}
     output_file = "ppm_max.json"
     with open(output_file, "w") as f:
         json.dump(results, f, indent=4)
