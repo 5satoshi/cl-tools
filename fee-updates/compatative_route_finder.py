@@ -70,11 +70,6 @@ def run_centrality_sweep(mynode, input_csv=None):
         ch_id = e_short_id[e]
         current_ppms[ch_id] = 1
         channel_history[ch_id] = []
-        # Initialize Tree-Based Bayesian Optimizer for each channel (search space: 1 to 100 PPM)
-        optimizers[ch_id] = Optimizer(
-            dimensions=[Integer(1, 100, prior='log-uniform')],
-            base_estimator="RF"
-        )
         
     start_iteration = 0
     if input_csv and os.path.exists(input_csv):
@@ -121,11 +116,22 @@ def run_centrality_sweep(mynode, input_csv=None):
                 best_iteration = it_n
 
         for ch_id in current_ppms:
+            upper_bound = 100
+            if channel_history[ch_id]:
+                max_ppm_with_rev = max([ppm for ppm, rev in channel_history[ch_id] if rev > 0] + [0])
+                if max_ppm_with_rev > 0:
+                    upper_bound = max(2, 2 * max_ppm_with_rev)
+                    
+            optimizers[ch_id] = Optimizer(
+                dimensions=[Integer(1, upper_bound, prior='log-uniform')],
+                base_estimator="RF"
+            )
+            
             if channel_history[ch_id]:
                 # Feed past history into the Bayesian optimizer
                 seen_ppms = set()
                 for past_ppm, past_rev in channel_history[ch_id]:
-                    if past_ppm not in seen_ppms:
+                    if past_ppm not in seen_ppms and past_ppm <= upper_bound:
                         seen_ppms.add(past_ppm)
                         try:
                             optimizers[ch_id].tell([past_ppm], -past_rev) # Minimize negative revenue
@@ -136,6 +142,11 @@ def run_centrality_sweep(mynode, input_csv=None):
                 current_ppms[ch_id] = int(optimizers[ch_id].ask()[0])
     else:
         logger.info("No input CSV provided or file not found. Starting all channels at PPM 1.")
+        for ch_id in current_ppms:
+            optimizers[ch_id] = Optimizer(
+                dimensions=[Integer(1, 100, prior='log-uniform')],
+                base_estimator="RF"
+            )
         
     max_iterations = 10
     
