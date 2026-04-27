@@ -58,7 +58,6 @@ def run_centrality_sweep(mynode, input_csv=None):
         
     logger.info("Initializing dynamic iterative PPM optimization...")
     
-    baseline_cent = {}
     current_ppms = {}
     channel_history = {}
     optimizers = {}
@@ -106,10 +105,6 @@ def run_centrality_sweep(mynode, input_csv=None):
                 else:
                     results.append([it_num, ch_id, ppm, cent_str, rev_str])
                     
-                if it_num == -1:
-                    baseline_cent[ch_id] = cent
-                    continue
-                    
                 if it_num not in iteration_revenues:
                     iteration_revenues[it_num] = 0
                 iteration_revenues[it_num] += rev
@@ -139,29 +134,6 @@ def run_centrality_sweep(mynode, input_csv=None):
     else:
         logger.info("No input CSV provided or file not found. Starting all channels at PPM 1.")
         
-    needs_baseline = False
-    for e in mynode_v.out_edges():
-        if e_short_id[e] not in baseline_cent:
-            needs_baseline = True
-            break
-            
-    if needs_baseline:
-        logger.info("Computing baseline centrality (PPM=1000000) to find non-converging routes...")
-        for e in mynode_v.out_edges():
-            e_fee_rate[e] = 1000000
-            
-        for e in DG.edges():
-            a = e_base_fee[e]
-            b = e_fee_rate[e] / 1000000.0
-            e_weight[e] = math.floor(a + tx_sat_cent * b * 1000) + e_epsilon[e]
-            
-        _, e_betw_base = gt.betweenness(DG, weight=e_weight, norm=False)
-        for e in mynode_v.out_edges():
-            ch_id = e_short_id[e]
-            cent = int(round(e_betw_base[e]))
-            baseline_cent[ch_id] = cent
-            results.append([-1, ch_id, 1000000, f"{cent}", "0"])
-        
     max_iterations = 10
     
     for iteration in tqdm(range(start_iteration, start_iteration + max_iterations), desc="Optimizing PPM"):
@@ -189,7 +161,7 @@ def run_centrality_sweep(mynode, input_csv=None):
             ch_id = e_short_id[e]
             ppm = current_ppms[ch_id]
             cent = int(round(e_betw[e]))
-            revenue = max(0, cent - baseline_cent[ch_id]) * ppm
+            revenue = cent * ppm
             
             sum_cent += cent
             sum_rev += revenue
