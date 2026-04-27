@@ -217,9 +217,7 @@ def run_centrality_sweep(mynode, input_csv=None):
             best_total_revenue = sum_rev
             best_iteration = iteration
             
-        bounds_str = " | ".join([f"{ch_id}: {channel_bounds[ch_id]}" for ch_id in mynode_v.out_edges() for ch_id in [e_short_id[ch_id]]])
         logger.info(f"Iteration {iteration + 1} completed | Sum Centrality: {sum_cent} | Total Revenue: {sum_rev}")
-        logger.info(f"Current PPM Max Bounds -> {bounds_str}")
             
     csv_file = "centrality_sweep_results.csv"
     with open(csv_file, mode='w', newline='') as f:
