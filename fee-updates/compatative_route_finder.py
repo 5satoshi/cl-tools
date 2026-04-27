@@ -187,7 +187,7 @@ def run_centrality_sweep(mynode, input_csv=None):
             channel_history[ch_id].append((ppm, revenue))
             
             if cent > 0:
-                channel_bounds[ch_id] += 1
+                channel_bounds[ch_id] = max(channel_bounds[ch_id], ppm + 1)
             
             # Recreate optimizer to apply dynamic boundaries
             optimizers[ch_id] = Optimizer(
