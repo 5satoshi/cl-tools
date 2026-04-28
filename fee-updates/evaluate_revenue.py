@@ -49,7 +49,27 @@ def evaluate_revenue(mynode, input_json, seed=42):
     e_fee_rate = DG.edge_properties["fee_per_millionth"]
     e_short_id = DG.edge_properties["short_channel_id"]
     
-    # Apply the PPMs from JSON to mynode's out_edges
+    tx_sat_cent = 80000
+    e_weight = DG.new_edge_property("double")
+    e_epsilon = DG.new_edge_property("double")
+    for e in DG.edges():
+        e_epsilon[e] = random.uniform(0.0001, 0.00011)
+
+    # 1. Evaluate Current Policy
+    logger.info("Computing betweenness centrality for CURRENT policy...")
+    original_ppms = {}
+    for e in DG.edges():
+        a = e_base_fee[e]
+        b = e_fee_rate[e] / 1000000.0
+        e_weight[e] = math.floor(a + tx_sat_cent * b * 1000) + e_epsilon[e]
+        
+    _, e_betw_current = gt.betweenness(DG, weight=e_weight, norm=False)
+    
+    for e in mynode_v.out_edges():
+        original_ppms[e_short_id[e]] = int(e_fee_rate[e])
+
+    # 2. Evaluate Optimized Policy
+    logger.info("Computing betweenness centrality for OPTIMIZED policy...")
     applied_ppms = {}
     for e in mynode_v.out_edges():
         ch_id = e_short_id[e]
@@ -60,38 +80,49 @@ def evaluate_revenue(mynode, input_json, seed=42):
         e_fee_rate[e] = ppm
         applied_ppms[ch_id] = ppm
         
-    tx_sat_cent = 80000
-    e_weight = DG.new_edge_property("double")
-    e_epsilon = DG.new_edge_property("double")
-    for e in DG.edges():
-        e_epsilon[e] = random.uniform(0.0001, 0.00011)
-        
     for e in DG.edges():
         a = e_base_fee[e]
         b = e_fee_rate[e] / 1000000.0
         e_weight[e] = math.floor(a + tx_sat_cent * b * 1000) + e_epsilon[e]
         
-    logger.info("Computing betweenness centrality...")
-    _, e_betw = gt.betweenness(DG, weight=e_weight, norm=False)
+    _, e_betw_opt = gt.betweenness(DG, weight=e_weight, norm=False)
     
-    sum_cent = 0
-    sum_rev = 0
+    sum_cent_curr = 0
+    sum_rev_curr = 0
+    sum_cent_opt = 0
+    sum_rev_opt = 0
     
-    print("\n=== Revenue Evaluation ===")
+    print("\n=== Revenue Evaluation (Current vs Optimized) ===")
+    print(f"{'Channel':<15} | {'Current (PPM/Cent/Rev)':<25} | {'Optimized (PPM/Cent/Rev)':<25} | {'Rev Diff'}")
+    print("-" * 85)
+    
     for e in mynode_v.out_edges():
         ch_id = e_short_id[e]
-        ppm = applied_ppms[ch_id]
-        cent = int(round(e_betw[e]))
-        revenue = cent * ppm
         
-        sum_cent += cent
-        sum_rev += revenue
+        # Current stats
+        curr_ppm = original_ppms[ch_id]
+        curr_cent = int(round(e_betw_current[e]))
+        curr_rev = curr_cent * curr_ppm
+        sum_cent_curr += curr_cent
+        sum_rev_curr += curr_rev
         
-        print(f"Channel {ch_id}: PPM = {ppm} | Centrality = {cent} | Revenue = {revenue}")
+        # Optimized stats
+        opt_ppm = applied_ppms[ch_id]
+        opt_cent = int(round(e_betw_opt[e]))
+        opt_rev = opt_cent * opt_ppm
+        sum_cent_opt += opt_cent
+        sum_rev_opt += opt_rev
         
-    print("---------------------------")
-    print(f"Total Centrality: {sum_cent}")
-    print(f"Total Revenue:    {sum_rev}")
+        rev_diff = opt_rev - curr_rev
+        diff_str = f"+{rev_diff}" if rev_diff >= 0 else f"{rev_diff}"
+        
+        curr_str = f"{curr_ppm} / {curr_cent} / {curr_rev}"
+        opt_str = f"{opt_ppm} / {opt_cent} / {opt_rev}"
+        
+        print(f"{ch_id:<15} | {curr_str:<25} | {opt_str:<25} | {diff_str}")
+        
+    print("-" * 85)
+    print(f"{'Total':<15} | {'- / ' + str(sum_cent_curr) + ' / ' + str(sum_rev_curr):<25} | {'- / ' + str(sum_cent_opt) + ' / ' + str(sum_rev_opt):<25} | {(sum_rev_opt - sum_rev_curr):+d}")
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
