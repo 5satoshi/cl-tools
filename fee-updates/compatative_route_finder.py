@@ -23,7 +23,8 @@ logging.basicConfig(
 logger = logging.getLogger("RouteFinder")
 
 
-def run_centrality_sweep(mynode, input_csv=None):
+def run_centrality_sweep(mynode, input_csv=None, seed=42):
+    random.seed(seed)
     
     rpc = os.environ['HOME']+"/.lightning/bitcoin/lightning-rpc"
     G = get_graph_from_cli(rpc)
@@ -247,9 +248,10 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--node", type=str, default="03fe8461ebc025880b58021c540e0b7782bb2bcdc99da9822f5c6d2184a59b8f69")
     parser.add_argument("--input-csv", type=str, default=None, help="Previous CSV results file to continue from")
+    parser.add_argument("--seed", type=int, default=42, help="Random seed for tie-breaking epsilon")
     args = parser.parse_args()
     
-    run_centrality_sweep(args.node, args.input_csv)
+    run_centrality_sweep(args.node, args.input_csv, args.seed)
 
 
 
