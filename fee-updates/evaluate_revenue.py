@@ -15,7 +15,9 @@ logging.basicConfig(
 )
 logger = logging.getLogger("EvaluateRevenue")
 
-def evaluate_revenue(mynode, input_json):
+def evaluate_revenue(mynode, input_json, seed=42):
+    random.seed(seed)
+    
     if not os.path.exists(input_json):
         logger.error(f"Input JSON file not found: {input_json}")
         return
@@ -95,6 +97,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--node", type=str, default="03fe8461ebc025880b58021c540e0b7782bb2bcdc99da9822f5c6d2184a59b8f69")
     parser.add_argument("--input-json", type=str, default="best_ppms.json", help="JSON file containing best PPMs")
+    parser.add_argument("--seed", type=int, default=42, help="Random seed for tie-breaking epsilon")
     args = parser.parse_args()
     
-    evaluate_revenue(args.node, args.input_json)
+    evaluate_revenue(args.node, args.input_json, args.seed)
