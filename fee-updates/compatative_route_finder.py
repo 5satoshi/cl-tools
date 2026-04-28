@@ -11,6 +11,7 @@ from skopt import Optimizer
 from skopt.space import Integer
 import numpy as np
 import warnings
+import json
 from graph_helper import get_graph_from_cli
 
 warnings.filterwarnings("ignore", message="The objective has been evaluated at point.*")
@@ -226,6 +227,17 @@ def run_centrality_sweep(mynode, input_csv=None):
         writer.writerows(results)
         
     logger.info(f"Results saved to {csv_file}")
+    
+    best_ppms = {}
+    for row in results:
+        if row[0] == best_iteration:
+            best_ppms[row[1]] = row[2]
+            
+    json_file = "best_ppms.json"
+    with open(json_file, mode='w') as f:
+        json.dump(best_ppms, f, indent=4)
+        
+    logger.info(f"Best PPM settings saved to {json_file}")
     
     print(f"\n=== Best overall Total Revenue of {best_total_revenue} was achieved at Iteration {best_iteration} (Internal Index) ===")
 
