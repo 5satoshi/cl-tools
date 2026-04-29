@@ -19,12 +19,14 @@ def get_graph_from_cli(rpc=".lightning/bitcoin/lightning-rpc"):
     e_fee_rate = DG.new_edge_property("double")
     e_satoshis = DG.new_edge_property("double")
     e_short_id = DG.new_edge_property("string")
+    e_htlc_max = DG.new_edge_property("double")
     
     DG.edge_properties["active"] = e_active
     DG.edge_properties["base_fee_millisatoshi"] = e_base_fee
     DG.edge_properties["fee_per_millionth"] = e_fee_rate
     DG.edge_properties["satoshis"] = e_satoshis
     DG.edge_properties["short_channel_id"] = e_short_id
+    DG.edge_properties["htlc_maximum_msat"] = e_htlc_max
 
     vertex_map = {}
     for _, row in dfc.iterrows():
@@ -54,6 +56,13 @@ def get_graph_from_cli(rpc=".lightning/bitcoin/lightning-rpc"):
         
         sat = row.get('satoshis', amt_msat / 1000.0)
         e_satoshis[e] = float(sat)
+        
+        htlc_max_msat = row.get('htlc_maximum_msat', 0)
+        if isinstance(htlc_max_msat, str) and htlc_max_msat.endswith('msat'):
+            htlc_max_msat = int(htlc_max_msat[:-4])
+        elif isinstance(htlc_max_msat, dict) and 'msat' in htlc_max_msat:
+            htlc_max_msat = htlc_max_msat['msat']
+        e_htlc_max[e] = float(htlc_max_msat)
         
         e_short_id[e] = row['short_channel_id']
     
