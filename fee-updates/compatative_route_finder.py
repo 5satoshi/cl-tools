@@ -60,11 +60,12 @@ def run_centrality_sweep(mynode, input_csv=None, seed=42):
     for e in DG.edges():
         e_epsilon[e] = random.uniform(0.0001, 0.00011)
         
-    logger.info("Starting uniform exponential PPM search...")
+    logger.info("Starting linear PPM scan...")
     
     best_total_revenue = -1
     best_ppm = -1
     current_ppm = 1
+    prev_sum_cent = -1
     
     while True:
         logger.info(f"Evaluating uniform PPM: {current_ppm}")
@@ -100,10 +101,13 @@ def run_centrality_sweep(mynode, input_csv=None, seed=42):
         if sum_rev > best_total_revenue:
             best_total_revenue = sum_rev
             best_ppm = current_ppm
-            current_ppm *= 2
-        else:
-            logger.info("Revenue decreased or plateaued. Stopping exponential search.")
+            
+        if sum_cent == prev_sum_cent or sum_cent == 0:
+            logger.info("Centrality plateaued or reached 0. Stopping linear scan.")
             break
+            
+        prev_sum_cent = sum_cent
+        current_ppm += 1
             
     csv_file = "centrality_sweep_results.csv"
     with open(csv_file, mode='w', newline='') as f:
