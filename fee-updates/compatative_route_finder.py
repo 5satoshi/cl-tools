@@ -60,12 +60,24 @@ def run_centrality_sweep(mynode, input_csv=None, seed=42):
     for e in DG.edges():
         e_epsilon[e] = random.uniform(0.0001, 0.00011)
         
+    logger.info("Computing target centrality at PPM = 1,000,000...")
+    for e in mynode_v.out_edges():
+        e_fee_rate[e] = 1000000
+        
+    for e in DG.edges():
+        a = e_base_fee[e]
+        b = e_fee_rate[e] / 1000000.0
+        e_weight[e] = math.floor(a + tx_sat_cent * b * 1000) + e_epsilon[e]
+        
+    _, e_betw = gt.betweenness(DG, weight=e_weight, norm=False)
+    target_cent = sum(int(round(e_betw[e])) for e in mynode_v.out_edges())
+    logger.info(f"Target centrality (PPM=1M) is {target_cent}")
+    
     logger.info("Starting linear PPM scan...")
     
     best_total_revenue = -1
     best_ppm = -1
     current_ppm = 1
-    prev_sum_cent = -1
     
     while True:
         logger.info(f"Evaluating uniform PPM: {current_ppm}")
@@ -102,11 +114,10 @@ def run_centrality_sweep(mynode, input_csv=None, seed=42):
             best_total_revenue = sum_rev
             best_ppm = current_ppm
             
-        if sum_cent == prev_sum_cent or sum_cent == 0:
-            logger.info("Centrality plateaued or reached 0. Stopping linear scan.")
+        if sum_cent <= target_cent:
+            logger.info(f"Centrality reached target ({sum_cent} <= {target_cent}). Stopping linear scan.")
             break
             
-        prev_sum_cent = sum_cent
         current_ppm += 1
             
     csv_file = "centrality_sweep_results.csv"
