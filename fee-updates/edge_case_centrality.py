@@ -11,7 +11,8 @@ logging.basicConfig(
 logger = logging.getLogger("EdgeCaseCent")
 
 
-def run_edge_cases(mynode):
+def run_edge_cases(mynode, seed=42):
+    random.seed(seed)
     rpc = os.environ.get('HOME', '') + "/.lightning/bitcoin/lightning-rpc"
     G = get_graph_from_cli(rpc)
     
@@ -84,6 +85,7 @@ def run_edge_cases(mynode):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--node", type=str, default="03fe8461ebc025880b58021c540e0b7782bb2bcdc99da9822f5c6d2184a59b8f69")
+    parser.add_argument("--seed", type=int, default=42, help="Random seed for tie-breaking epsilon")
     args = parser.parse_args()
     
-    run_edge_cases(args.node)
+    run_edge_cases(args.node, args.seed)
