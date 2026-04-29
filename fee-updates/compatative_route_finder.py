@@ -75,6 +75,11 @@ def run_centrality_sweep(mynode, input_csv=None, seed=42):
     
     logger.info("Starting linear PPM scan...")
     
+    csv_file = "centrality_sweep_results.csv"
+    with open(csv_file, mode='w', newline='') as f:
+        writer = csv.writer(f)
+        writer.writerow(["PPM", "Channel", "Edge_Centrality", "Revenue_Potential"])
+        
     best_total_revenue = -1
     best_ppm = -1
     current_ppm = 1
@@ -98,6 +103,7 @@ def run_centrality_sweep(mynode, input_csv=None, seed=42):
         sum_cent = 0
         sum_rev = 0
         
+        iteration_results = []
         for e in mynode_v.out_edges():
             ch_id = e_short_id[e]
             cent = int(round(e_betw[e]))
@@ -106,7 +112,13 @@ def run_centrality_sweep(mynode, input_csv=None, seed=42):
             sum_cent += cent
             sum_rev += revenue
             
-            results.append([current_ppm, ch_id, f"{cent}", f"{revenue}"])
+            row = [current_ppm, ch_id, f"{cent}", f"{revenue}"]
+            results.append(row)
+            iteration_results.append(row)
+            
+        with open(csv_file, mode='a', newline='') as f:
+            writer = csv.writer(f)
+            writer.writerows(iteration_results)
             
         logger.info(f"Uniform PPM {current_ppm} completed | Sum Centrality: {sum_cent} | Total Revenue: {sum_rev}")
         
@@ -120,13 +132,7 @@ def run_centrality_sweep(mynode, input_csv=None, seed=42):
             
         current_ppm += 1
             
-    csv_file = "centrality_sweep_results.csv"
-    with open(csv_file, mode='w', newline='') as f:
-        writer = csv.writer(f)
-        writer.writerow(["PPM", "Channel", "Edge_Centrality", "Revenue_Potential"])
-        writer.writerows(results)
-        
-    logger.info(f"Results saved to {csv_file}")
+    logger.info(f"Results completely saved to {csv_file}")
     
     best_ppms = {}
     for row in results:
