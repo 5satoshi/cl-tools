@@ -7,14 +7,9 @@ from datetime import datetime
 import argparse
 from tqdm import tqdm
 import csv
-from skopt import Optimizer
-from skopt.space import Integer
 import numpy as np
-import warnings
 import json
 from graph_helper import get_graph_from_cli
-
-warnings.filterwarnings("ignore", message="The objective has been evaluated at point.*")
 
 logging.basicConfig(
     level=logging.INFO,
@@ -65,110 +60,18 @@ def run_centrality_sweep(mynode, input_csv=None, seed=42):
     for e in DG.edges():
         e_epsilon[e] = random.uniform(0.0001, 0.00011)
         
-    logger.info("Initializing dynamic iterative PPM optimization...")
-    
-    current_ppms = {}
-    channel_history = {}
-    optimizers = {}
+    logger.info("Starting uniform exponential PPM search...")
     
     best_total_revenue = -1
-    best_iteration = -1
-    iteration_revenues = {}
+    best_ppm = -1
+    current_ppm = 1
     
-    for e in mynode_v.out_edges():
-        ch_id = e_short_id[e]
-        current_ppms[ch_id] = 1
-        channel_history[ch_id] = []
+    while True:
+        logger.info(f"Evaluating uniform PPM: {current_ppm}")
         
-    channel_bounds = {}
-    
-    start_iteration = 0
-    if input_csv and os.path.exists(input_csv):
-        logger.info(f"Loading previous results from {input_csv}...")
-        
-        with open(input_csv, mode='r') as f:
-            reader = csv.reader(f)
-            header = next(reader, None)
-            
-            has_iteration = header and "Iteration" in header
-            
-            for row in reader:
-                if not row or len(row) < 4:
-                    continue
-                    
-                if has_iteration and len(row) >= 5:
-                    it_str, ch_id, ppm_str, cent_str, rev_str = row
-                    it_num = int(it_str)
-                    if it_num >= 0:
-                        start_iteration = max(start_iteration, it_num + 1)
-                else:
-                    ch_id, ppm_str, cent_str, rev_str = row
-                    it_num = 0
-                    
-                ppm = int(ppm_str)
-                cent = int(cent_str)
-                rev = int(float(rev_str))
-                
-                if has_iteration:
-                    results.append([it_num, ch_id, ppm, cent_str, rev_str])
-                else:
-                    results.append([it_num, ch_id, ppm, cent_str, rev_str])
-                    
-                if it_num not in iteration_revenues:
-                    iteration_revenues[it_num] = 0
-                iteration_revenues[it_num] += rev
-                
-                if ch_id in current_ppms:
-                    channel_history[ch_id].append((ppm, rev))
-                        
-        for it_n, tot_rev in iteration_revenues.items():
-            if tot_rev > best_total_revenue:
-                best_total_revenue = tot_rev
-                best_iteration = it_n
-
-        for ch_id in current_ppms:
-            channel_bounds[ch_id] = 2
-            if channel_history[ch_id]:
-                max_ppm_with_rev = max([ppm for ppm, rev in channel_history[ch_id] if rev > 0] + [0])
-                if max_ppm_with_rev > 0:
-                    channel_bounds[ch_id] = max(2, max_ppm_with_rev + 1)
-                    
-            optimizers[ch_id] = Optimizer(
-                dimensions=[Integer(1, channel_bounds[ch_id], prior='log-uniform')],
-                base_estimator="RF"
-            )
-            
-            if channel_history[ch_id]:
-                # Feed past history into the Bayesian optimizer
-                seen_ppms = set()
-                for past_ppm, past_rev in channel_history[ch_id]:
-                    if past_ppm not in seen_ppms and past_ppm <= channel_bounds[ch_id]:
-                        seen_ppms.add(past_ppm)
-                        try:
-                            optimizers[ch_id].tell([past_ppm], -past_rev) # Minimize negative revenue
-                        except Exception:
-                            pass
-                
-                # Ask the optimizer for the next best PPM to test
-                current_ppms[ch_id] = int(optimizers[ch_id].ask()[0])
-    else:
-        logger.info("No input CSV provided or file not found. Starting all channels at PPM 1.")
-        for ch_id in current_ppms:
-            channel_bounds[ch_id] = 2
-            optimizers[ch_id] = Optimizer(
-                dimensions=[Integer(1, channel_bounds[ch_id], prior='log-uniform')],
-                base_estimator="RF"
-            )
-        
-    max_iterations = 10
-    
-    for iteration in tqdm(range(start_iteration, start_iteration + max_iterations), desc="Optimizing PPM"):
-        logger.info(f"Iteration {iteration + 1} (Total steps)")
-        
-        # Update mynode out-edges PPM dynamically per channel
+        # Update mynode out-edges PPM uniformly
         for e in mynode_v.out_edges():
-            ch_id = e_short_id[e]
-            e_fee_rate[e] = current_ppms[ch_id]
+            e_fee_rate[e] = current_ppm
             
         # Compute edge weights for the whole graph based on 80k sat tx
         for e in DG.edges():
@@ -182,51 +85,25 @@ def run_centrality_sweep(mynode, input_csv=None, seed=42):
         sum_cent = 0
         sum_rev = 0
         
-        # Record results and calculate gradient-based next step per channel
         for e in mynode_v.out_edges():
             ch_id = e_short_id[e]
-            ppm = current_ppms[ch_id]
             cent = int(round(e_betw[e]))
-            revenue = cent * ppm
+            revenue = cent * current_ppm
             
             sum_cent += cent
             sum_rev += revenue
             
-            results.append([iteration, ch_id, ppm, f"{cent}", f"{revenue}"])
-            channel_history[ch_id].append((ppm, revenue))
+            results.append([current_ppm, ch_id, current_ppm, f"{cent}", f"{revenue}"])
             
-            if cent > 0:
-                channel_bounds[ch_id] = max(channel_bounds[ch_id], ppm + 1)
-            
-            # Recreate optimizer to apply dynamic boundaries
-            optimizers[ch_id] = Optimizer(
-                dimensions=[Integer(1, channel_bounds[ch_id], prior='log-uniform')],
-                base_estimator="RF"
-            )
-            
-            # Feed past history into the new Bayesian optimizer
-            seen_ppms = set()
-            for past_ppm, past_rev in channel_history[ch_id]:
-                if past_ppm not in seen_ppms and past_ppm <= channel_bounds[ch_id]:
-                    seen_ppms.add(past_ppm)
-                    try:
-                        optimizers[ch_id].tell([past_ppm], -past_rev)
-                    except Exception:
-                        pass
-            
-            try:
-                next_ppm = int(optimizers[ch_id].ask()[0])
-            except Exception as e:
-                logger.error(f"Optimizer error for channel {ch_id}: {e}. Falling back to +1 step.")
-                next_ppm = ppm + 1
-                
-            current_ppms[ch_id] = next_ppm
-            
+        logger.info(f"Uniform PPM {current_ppm} completed | Sum Centrality: {sum_cent} | Total Revenue: {sum_rev}")
+        
         if sum_rev > best_total_revenue:
             best_total_revenue = sum_rev
-            best_iteration = iteration
-            
-        logger.info(f"Iteration {iteration + 1} completed | Sum Centrality: {sum_cent} | Total Revenue: {sum_rev}")
+            best_ppm = current_ppm
+            current_ppm *= 2
+        else:
+            logger.info("Revenue decreased or plateaued. Stopping exponential search.")
+            break
             
     csv_file = "centrality_sweep_results.csv"
     with open(csv_file, mode='w', newline='') as f:
@@ -238,7 +115,7 @@ def run_centrality_sweep(mynode, input_csv=None, seed=42):
     
     best_ppms = {}
     for row in results:
-        if row[0] == best_iteration:
+        if row[0] == best_ppm:
             best_ppms[row[1]] = row[2]
             
     json_file = "best_ppms.json"
@@ -247,7 +124,7 @@ def run_centrality_sweep(mynode, input_csv=None, seed=42):
         
     logger.info(f"Best PPM settings saved to {json_file}")
     
-    print(f"\n=== Best overall Total Revenue of {best_total_revenue} was achieved at Iteration {best_iteration} (Internal Index) ===")
+    print(f"\n=== Best overall Total Revenue of {best_total_revenue} was achieved at uniform PPM {best_ppm} ===")
 
 
 if __name__ == "__main__":
