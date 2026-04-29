@@ -106,7 +106,7 @@ def run_centrality_sweep(mynode, input_csv=None, seed=42):
             sum_cent += cent
             sum_rev += revenue
             
-            results.append([current_ppm, ch_id, current_ppm, f"{cent}", f"{revenue}"])
+            results.append([current_ppm, ch_id, f"{cent}", f"{revenue}"])
             
         logger.info(f"Uniform PPM {current_ppm} completed | Sum Centrality: {sum_cent} | Total Revenue: {sum_rev}")
         
@@ -123,7 +123,7 @@ def run_centrality_sweep(mynode, input_csv=None, seed=42):
     csv_file = "centrality_sweep_results.csv"
     with open(csv_file, mode='w', newline='') as f:
         writer = csv.writer(f)
-        writer.writerow(["Iteration", "Channel", "PPM", "Edge_Centrality", "Revenue_Potential"])
+        writer.writerow(["PPM", "Channel", "Edge_Centrality", "Revenue_Potential"])
         writer.writerows(results)
         
     logger.info(f"Results saved to {csv_file}")
@@ -131,7 +131,7 @@ def run_centrality_sweep(mynode, input_csv=None, seed=42):
     best_ppms = {}
     for row in results:
         if row[0] == best_ppm:
-            best_ppms[row[1]] = row[2]
+            best_ppms[row[1]] = row[0]
             
     json_file = "best_ppms.json"
     with open(json_file, mode='w') as f:
