@@ -28,8 +28,16 @@ def evaluate_revenue(mynode, input_json, seed=42):
     rpc = os.environ.get('HOME', '') + "/.lightning/bitcoin/lightning-rpc"
     G = get_graph_from_cli(rpc)
     
+    tx_sat_cent = 80000
+    tx_msat = tx_sat_cent * 1000
+    
     e_active = G.edge_properties["active"]
-    wDG = gt.GraphView(G, efilt=e_active)
+    e_htlc_max = G.edge_properties["htlc_maximum_msat"]
+    
+    e_filt = G.new_edge_property("bool")
+    e_filt.a = e_active.a & (e_htlc_max.a >= tx_msat)
+    
+    wDG = gt.GraphView(G, efilt=e_filt)
     
     comp, hist = gt.label_components(wDG)
     largest_comp = hist.argmax()
@@ -49,7 +57,6 @@ def evaluate_revenue(mynode, input_json, seed=42):
     e_fee_rate = DG.edge_properties["fee_per_millionth"]
     e_short_id = DG.edge_properties["short_channel_id"]
     
-    tx_sat_cent = 80000
     e_weight = DG.new_edge_property("double")
     e_epsilon = DG.new_edge_property("double")
     for e in DG.edges():
