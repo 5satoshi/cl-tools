@@ -15,8 +15,16 @@ def run_edge_cases(mynode):
     rpc = os.environ.get('HOME', '') + "/.lightning/bitcoin/lightning-rpc"
     G = get_graph_from_cli(rpc)
     
+    tx_sat_cent = 80000
+    tx_msat = tx_sat_cent * 1000
+    
     e_active = G.edge_properties["active"]
-    wDG = gt.GraphView(G, efilt=e_active)
+    e_htlc_max = G.edge_properties["htlc_maximum_msat"]
+    
+    e_filt = G.new_edge_property("bool")
+    e_filt.a = e_active.a & (e_htlc_max.a >= tx_msat)
+    
+    wDG = gt.GraphView(G, efilt=e_filt)
     
     comp, hist = gt.label_components(wDG)
     largest_comp = hist.argmax()
@@ -34,7 +42,6 @@ def run_edge_cases(mynode):
     for e in mynode_v.out_edges():
         e_base_fee[e] = 0
         
-    tx_sat_cent = 80000
     e_weight = DG.new_edge_property("double")
     e_epsilon = DG.new_edge_property("double")
     for e in DG.edges():
