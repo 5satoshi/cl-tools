@@ -48,7 +48,7 @@ def run_edge_cases(mynode, seed=42):
     for e in DG.edges():
         e_epsilon[e] = random.uniform(0.0001, 0.00011)
 
-    target_ppms = [0, 1, 1000000]
+    target_ppms = [1000000, 1, 0]
     results = {}
     
     for e in mynode_v.out_edges():
@@ -75,9 +75,12 @@ def run_edge_cases(mynode, seed=42):
     csv_file = "edge_case_centrality_results.csv"
     with open(csv_file, mode='w', newline='') as f:
         writer = csv.writer(f)
-        writer.writerow(["Channel", "Cent_0_PPM", "Cent_1_PPM", "Cent_1M_PPM"])
+        writer.writerow(["Channel", "Cent_1M_PPM", "Cent_1_PPM_Norm", "Cent_0_PPM_Norm"])
         for ch_id, data in sorted(results.items()):
-            writer.writerow([ch_id, data[0], data[1], data[1000000]])
+            cent_1m = data[1000000]
+            norm_1 = data[1] / cent_1m if cent_1m > 0 else 0.0
+            norm_0 = data[0] / cent_1m if cent_1m > 0 else 0.0
+            writer.writerow([ch_id, cent_1m, f"{norm_1:.4f}", f"{norm_0:.4f}"])
             
     logger.info(f"Edge case results saved to {csv_file}")
 
