@@ -25,6 +25,11 @@ def evaluate_revenue(mynode, input_json, seed=42, refresh_graph=False):
     with open(input_json, 'r') as f:
         best_ppms = json.load(f)
         
+    compare_ppms = None
+    if input_json != "best_ppms.json" and os.path.exists("best_ppms.json"):
+        with open("best_ppms.json", 'r') as f:
+            compare_ppms = json.load(f)
+            
     rpc = os.environ.get('HOME', '') + "/.lightning/bitcoin/lightning-rpc"
     G = load_or_fetch_graph(rpc, refresh=refresh_graph)
     
@@ -62,8 +67,16 @@ def evaluate_revenue(mynode, input_json, seed=42, refresh_graph=False):
     for e in DG.edges():
         e_epsilon[e] = random.uniform(0.0001, 0.00011)
 
-    # 1. Evaluate Current Policy
-    logger.info("Computing betweenness centrality for CURRENT policy...")
+    # 1. Evaluate Baseline Policy
+    if compare_ppms is not None:
+        logger.info("Computing betweenness centrality for BASELINE (best_ppms.json) policy...")
+        for e in mynode_v.out_edges():
+            ch_id = e_short_id[e]
+            e_base_fee[e] = 0
+            e_fee_rate[e] = int(compare_ppms.get(ch_id, 1))
+    else:
+        logger.info("Computing betweenness centrality for CURRENT policy...")
+
     original_ppms = {}
     for e in DG.edges():
         a = e_base_fee[e]
@@ -131,8 +144,9 @@ def evaluate_revenue(mynode, input_json, seed=42, refresh_graph=False):
     sum_cent_opt = 0
     sum_rev_opt = 0
     
-    print("\n=== Revenue Evaluation (Current vs Optimized) ===")
-    print(f"{'Channel':<15} | {'Current (PPM/Cent/Self/Rev)':<30} | {'Optimized (PPM/Cent/Self/Rev)':<30} | {'Rev Diff'}")
+    policy_name = "Baseline" if compare_ppms is not None else "Current"
+    print(f"\n=== Revenue Evaluation ({policy_name} vs Optimized) ===")
+    print(f"{'Channel':<15} | {f'{policy_name} (PPM/Cent/Self/Rev)':<30} | {'Optimized (PPM/Cent/Self/Rev)':<30} | {'Rev Diff'}")
     print("-" * 95)
     
     for e in mynode_v.out_edges():
