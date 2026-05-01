@@ -72,6 +72,22 @@ def evaluate_revenue(mynode, input_json, seed=42):
         
     _, e_betw_current = gt.betweenness(DG, weight=e_weight, norm=False)
     
+    _, pred_map_curr = gt.shortest_distance(DG, source=mynode_v, weights=e_weight, pred_map=True)
+    e_counts_curr = DG.new_edge_property("int")
+    for v in DG.vertices():
+        if v == mynode_v:
+            continue
+        curr = v
+        while curr != mynode_v:
+            p = pred_map_curr[curr]
+            if p == int(curr):
+                break
+            v_p = DG.vertex(p)
+            e_edge = DG.edge(v_p, curr)
+            if e_edge:
+                e_counts_curr[e_edge] += 1
+            curr = v_p
+            
     for e in mynode_v.out_edges():
         original_ppms[e_short_id[e]] = int(e_fee_rate[e])
 
@@ -94,6 +110,22 @@ def evaluate_revenue(mynode, input_json, seed=42):
         
     _, e_betw_opt = gt.betweenness(DG, weight=e_weight, norm=False)
     
+    _, pred_map_opt = gt.shortest_distance(DG, source=mynode_v, weights=e_weight, pred_map=True)
+    e_counts_opt = DG.new_edge_property("int")
+    for v in DG.vertices():
+        if v == mynode_v:
+            continue
+        curr = v
+        while curr != mynode_v:
+            p = pred_map_opt[curr]
+            if p == int(curr):
+                break
+            v_p = DG.vertex(p)
+            e_edge = DG.edge(v_p, curr)
+            if e_edge:
+                e_counts_opt[e_edge] += 1
+            curr = v_p
+            
     sum_cent_curr = 0
     sum_rev_curr = 0
     sum_cent_opt = 0
@@ -108,14 +140,14 @@ def evaluate_revenue(mynode, input_json, seed=42):
         
         # Current stats
         curr_ppm = original_ppms[ch_id]
-        curr_cent = int(round(e_betw_current[e]))
+        curr_cent = max(0, int(round(e_betw_current[e])) - e_counts_curr[e])
         curr_rev = curr_cent * curr_ppm
         sum_cent_curr += curr_cent
         sum_rev_curr += curr_rev
         
         # Optimized stats
         opt_ppm = applied_ppms[ch_id]
-        opt_cent = int(round(e_betw_opt[e]))
+        opt_cent = max(0, int(round(e_betw_opt[e])) - e_counts_opt[e])
         opt_rev = opt_cent * opt_ppm
         sum_cent_opt += opt_cent
         sum_rev_opt += opt_rev

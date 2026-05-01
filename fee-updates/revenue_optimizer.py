@@ -70,7 +70,24 @@ def run_centrality_sweep(mynode, input_csv=None, seed=42):
         e_weight[e] = math.floor(a + tx_sat_cent * b * 1000) + e_epsilon[e]
         
     _, e_betw = gt.betweenness(DG, weight=e_weight, norm=False)
-    target_cent = sum(int(round(e_betw[e])) for e in mynode_v.out_edges())
+    
+    _, pred_map = gt.shortest_distance(DG, source=mynode_v, weights=e_weight, pred_map=True)
+    e_counts = DG.new_edge_property("int")
+    for v in DG.vertices():
+        if v == mynode_v:
+            continue
+        curr = v
+        while curr != mynode_v:
+            p = pred_map[curr]
+            if p == int(curr):
+                break
+            v_p = DG.vertex(p)
+            e_edge = DG.edge(v_p, curr)
+            if e_edge:
+                e_counts[e_edge] += 1
+            curr = v_p
+            
+    target_cent = sum(max(0, int(round(e_betw[e])) - e_counts[e]) for e in mynode_v.out_edges())
     logger.info(f"Target centrality (PPM=1M) is {target_cent}")
     
     logger.info("Starting linear PPM scan...")
@@ -100,13 +117,29 @@ def run_centrality_sweep(mynode, input_csv=None, seed=42):
         # Compute betweenness
         _, e_betw = gt.betweenness(DG, weight=e_weight, norm=False)
         
+        _, pred_map = gt.shortest_distance(DG, source=mynode_v, weights=e_weight, pred_map=True)
+        e_counts = DG.new_edge_property("int")
+        for v in DG.vertices():
+            if v == mynode_v:
+                continue
+            curr = v
+            while curr != mynode_v:
+                p = pred_map[curr]
+                if p == int(curr):
+                    break
+                v_p = DG.vertex(p)
+                e_edge = DG.edge(v_p, curr)
+                if e_edge:
+                    e_counts[e_edge] += 1
+                curr = v_p
+        
         sum_cent = 0
         sum_rev = 0
         
         iteration_results = []
         for e in mynode_v.out_edges():
             ch_id = e_short_id[e]
-            cent = int(round(e_betw[e]))
+            cent = max(0, int(round(e_betw[e])) - e_counts[e])
             revenue = cent * current_ppm
             
             sum_cent += cent

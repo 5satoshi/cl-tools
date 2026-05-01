@@ -50,9 +50,26 @@ def run_ppm_max_search(mynode):
         e_weight[e] = math.floor(a + tx_sat_cent * b * 1000) + e_epsilon[e]
         
     _, e_betw_base = gt.betweenness(DG, weight=e_weight, norm=False)
+    
+    _, pred_map_base = gt.shortest_distance(DG, source=mynode_v, weights=e_weight, pred_map=True)
+    e_counts_base = DG.new_edge_property("int")
+    for v in DG.vertices():
+        if v == mynode_v:
+            continue
+        curr = v
+        while curr != mynode_v:
+            p = pred_map_base[curr]
+            if p == int(curr):
+                break
+            v_p = DG.vertex(p)
+            e_edge = DG.edge(v_p, curr)
+            if e_edge:
+                e_counts_base[e_edge] += 1
+            curr = v_p
+            
     for e in mynode_v.out_edges():
         ch_id = e_short_id[e]
-        baseline_cent[ch_id] = int(round(e_betw_base[e]))
+        baseline_cent[ch_id] = max(0, int(round(e_betw_base[e])) - e_counts_base[e])
 
     # Initialize search state for all channels simultaneously
     states = {}
@@ -85,6 +102,22 @@ def run_ppm_max_search(mynode):
             e_weight[e] = math.floor(a + tx_sat_cent * b * 1000) + e_epsilon[e]
             
         _, e_betw = gt.betweenness(DG, weight=e_weight, norm=False)
+        
+        _, pred_map = gt.shortest_distance(DG, source=mynode_v, weights=e_weight, pred_map=True)
+        e_counts = DG.new_edge_property("int")
+        for v in DG.vertices():
+            if v == mynode_v:
+                continue
+            curr = v
+            while curr != mynode_v:
+                p = pred_map[curr]
+                if p == int(curr):
+                    break
+                v_p = DG.vertex(p)
+                e_edge = DG.edge(v_p, curr)
+                if e_edge:
+                    e_counts[e_edge] += 1
+                curr = v_p
 
         for e in mynode_v.out_edges():
             ch_id = e_short_id[e]
@@ -92,7 +125,7 @@ def run_ppm_max_search(mynode):
             if s['mode'] == 'done':
                 continue
 
-            cent = int(round(e_betw[e]))
+            cent = max(0, int(round(e_betw[e])) - e_counts[e])
             has_revenue = cent > baseline_cent[ch_id]
             
             tested_ppm = s['ppm']
