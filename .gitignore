@@ -136,3 +136,9 @@ dmypy.json
 *.pkl
 *.csv
 .aider*
+
+#outputs
+*.pdf
+*.png
+*.json
+*.save
