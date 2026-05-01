@@ -1,6 +1,14 @@
+import os
 import pandas as pd
 import graph_tool.all as gt
 from pyln.client import LightningRpc
+
+def load_or_fetch_graph(rpc=".lightning/bitcoin/lightning-rpc", cache_file="graph.gt", refresh=False):
+    if not refresh and os.path.exists(cache_file):
+        return gt.load_graph(cache_file)
+    DG = get_graph_from_cli(rpc)
+    DG.save(cache_file)
+    return DG
 
 def get_graph_from_cli(rpc=".lightning/bitcoin/lightning-rpc"):
     

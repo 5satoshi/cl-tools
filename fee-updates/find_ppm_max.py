@@ -2,7 +2,7 @@
 
 import sys, math, os, random, logging, json, argparse
 import graph_tool.all as gt
-from graph_helper import get_graph_from_cli
+from graph_helper import load_or_fetch_graph
 
 logging.basicConfig(
     level=logging.INFO,
@@ -10,9 +10,9 @@ logging.basicConfig(
 )
 logger = logging.getLogger("PpmMaxFinder")
 
-def run_ppm_max_search(mynode):
+def run_ppm_max_search(mynode, refresh_graph=False):
     rpc = os.environ.get('HOME', '') + "/.lightning/bitcoin/lightning-rpc"
-    G = get_graph_from_cli(rpc)
+    G = load_or_fetch_graph(rpc, refresh=refresh_graph)
     
     e_active = G.edge_properties["active"]
     wDG = gt.GraphView(G, efilt=e_active)
@@ -170,5 +170,6 @@ def run_ppm_max_search(mynode):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--node", type=str, default="03fe8461ebc025880b58021c540e0b7782bb2bcdc99da9822f5c6d2184a59b8f69")
+    parser.add_argument("--refresh-graph", action="store_true", help="Fetch a new graph from the node instead of using cache")
     args = parser.parse_args()
-    run_ppm_max_search(args.node)
+    run_ppm_max_search(args.node, args.refresh_graph)

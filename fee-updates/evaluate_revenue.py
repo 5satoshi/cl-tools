@@ -7,7 +7,7 @@ import logging
 import json
 import argparse
 import graph_tool.all as gt
-from graph_helper import get_graph_from_cli
+from graph_helper import load_or_fetch_graph
 
 logging.basicConfig(
     level=logging.INFO,
@@ -15,7 +15,7 @@ logging.basicConfig(
 )
 logger = logging.getLogger("EvaluateRevenue")
 
-def evaluate_revenue(mynode, input_json, seed=42):
+def evaluate_revenue(mynode, input_json, seed=42, refresh_graph=False):
     random.seed(seed)
     
     if not os.path.exists(input_json):
@@ -26,7 +26,7 @@ def evaluate_revenue(mynode, input_json, seed=42):
         best_ppms = json.load(f)
         
     rpc = os.environ.get('HOME', '') + "/.lightning/bitcoin/lightning-rpc"
-    G = get_graph_from_cli(rpc)
+    G = load_or_fetch_graph(rpc, refresh=refresh_graph)
     
     tx_sat_cent = 80000
     tx_msat = tx_sat_cent * 1000
@@ -168,6 +168,7 @@ if __name__ == "__main__":
     parser.add_argument("--node", type=str, default="03fe8461ebc025880b58021c540e0b7782bb2bcdc99da9822f5c6d2184a59b8f69")
     parser.add_argument("--input-json", type=str, default="best_ppms.json", help="JSON file containing best PPMs")
     parser.add_argument("--seed", type=int, default=42, help="Random seed for tie-breaking epsilon")
+    parser.add_argument("--refresh-graph", action="store_true", help="Fetch a new graph from the node instead of using cache")
     args = parser.parse_args()
     
-    evaluate_revenue(args.node, args.input_json, args.seed)
+    evaluate_revenue(args.node, args.input_json, args.seed, args.refresh_graph)
