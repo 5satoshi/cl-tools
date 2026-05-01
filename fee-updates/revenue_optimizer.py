@@ -95,7 +95,7 @@ def run_centrality_sweep(mynode, input_csv=None, seed=42):
     csv_file = "centrality_sweep_results.csv"
     with open(csv_file, mode='w', newline='') as f:
         writer = csv.writer(f)
-        writer.writerow(["PPM", "Channel", "Edge_Centrality", "Revenue_Potential"])
+        writer.writerow(["PPM", "Channel", "Edge_Centrality", "Self_Paths", "Revenue_Potential"])
         
     best_total_revenue = -1
     best_ppm = -1
@@ -145,7 +145,7 @@ def run_centrality_sweep(mynode, input_csv=None, seed=42):
             sum_cent += cent
             sum_rev += revenue
             
-            row = [current_ppm, ch_id, f"{cent}", f"{revenue}"]
+            row = [current_ppm, ch_id, f"{cent}", f"{e_counts[e]}", f"{revenue}"]
             results.append(row)
             iteration_results.append(row)
             
