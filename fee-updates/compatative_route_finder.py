@@ -105,16 +105,17 @@ def run_compatative_route_finder(mynode, seed=42):
     edge_stats = []
     e_short_id = DG.edge_properties["short_channel_id"]
     for e in CompetitiveGraph.edges():
-        edge_stats.append((e_diff[e], v_id[e.source()], v_id[e.target()], e_short_id[e]))
+        edge_stats.append((e_diff[e], v_id[e.source()], v_id[e.target()], e_short_id[e], e_base_fee[e], e_fee_rate[e]))
         
     edge_stats.sort(reverse=True, key=lambda x: x[0])
     
     logger.info("Top 5 Most Competitive Edges:")
-    for i, (count, src, tgt, scid) in enumerate(edge_stats[:5]):
-        logger.info(f"  {i+1}. {scid} (Count: {count}) | {src[:8]}... -> {tgt[:8]}...")
+    for i, (count, src, tgt, scid, base_fee, fee_rate) in enumerate(edge_stats[:5]):
+        direction = "Outbound" if src == mynode else "Inbound" if tgt == mynode else "Other"
+        logger.info(f"  {i+1}. {scid} [{direction}] (Count: {count}) | {src[:8]}... -> {tgt[:8]}... | Base: {int(base_fee)} msat, Rate: {int(fee_rate)} ppm")
         
     node_scores = {}
-    for count, src, tgt, scid in edge_stats:
+    for count, src, tgt, scid, _, _ in edge_stats:
         node_scores[src] = node_scores.get(src, 0) + count
         
     if node_scores:
