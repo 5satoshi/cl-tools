@@ -81,7 +81,7 @@ def run_compatative_route_finder(mynode, seed=42):
     e_comp_filt = DG.new_edge_property("bool")
     
     for e in DG.edges():
-        diff = int(round(e_betw_1[e])) - int(round(e_betw_1M[e]))
+        diff = int(round(e_betw_1M[e])) - int(round(e_betw_1[e]))
         e_diff[e] = diff
         e_comp_filt[e] = (diff > 0)
         
@@ -100,6 +100,26 @@ def run_compatative_route_finder(mynode, seed=42):
     
     logger.info(f"Original Graph: {DG.num_vertices()} nodes, {DG.num_edges()} edges.")
     logger.info(f"Competitive Graph built: {CompetitiveGraph.num_vertices()} nodes, {CompetitiveGraph.num_edges()} edges.")
+    
+    # Calculate statistics
+    edge_stats = []
+    e_short_id = DG.edge_properties["short_channel_id"]
+    for e in CompetitiveGraph.edges():
+        edge_stats.append((e_diff[e], v_id[e.source()], v_id[e.target()], e_short_id[e]))
+        
+    edge_stats.sort(reverse=True, key=lambda x: x[0])
+    
+    logger.info("Top 5 Most Competitive Edges:")
+    for i, (count, src, tgt, scid) in enumerate(edge_stats[:5]):
+        logger.info(f"  {i+1}. {scid} (Count: {count}) | {src[:8]}... -> {tgt[:8]}...")
+        
+    node_scores = {}
+    for count, src, tgt, scid in edge_stats:
+        node_scores[src] = node_scores.get(src, 0) + count
+        
+    if node_scores:
+        most_comp_node = max(node_scores.items(), key=lambda x: x[1])
+        logger.info(f"Most Competitive Node: {most_comp_node[0]} (Score: {most_comp_node[1]})")
     
     return CompetitiveGraph
 
