@@ -91,11 +91,18 @@ def find_equivalent_ppms(input_csv, output_json):
     print("-" * 65)
     print(f"Total projected revenue boost from individual channel optimizations: +{total_rev_boost}")
     
+    optimized_ppms = {}
+    for ch_id, eq_ppm in equivalent_ppms.items():
+        if eq_ppm > best_ppm:
+            optimized_ppms[ch_id] = best_ppm + 1
+        else:
+            optimized_ppms[ch_id] = best_ppm
+
     # Save to JSON
     with open(output_json, mode='w') as f:
-        json.dump(equivalent_ppms, f, indent=4)
+        json.dump(optimized_ppms, f, indent=4)
         
-    logger.info(f"Equivalent individual PPMs saved to {output_json}")
+    logger.info(f"Optimized individual PPMs saved to {output_json}")
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Find higher PPMs that retain the same centrality as the optimal uniform PPM")
