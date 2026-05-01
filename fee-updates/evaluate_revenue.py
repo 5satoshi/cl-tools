@@ -146,8 +146,8 @@ def evaluate_revenue(mynode, input_json, seed=42, refresh_graph=False):
     
     policy_name = "Baseline" if compare_ppms is not None else "Current"
     print(f"\n=== Revenue Evaluation ({policy_name} vs Optimized) ===")
-    print(f"{'Channel':<15} | {f'{policy_name} (PPM/Cent/Self/Rev)':<30} | {'Optimized (PPM/Cent/Self/Rev)':<30} | {'Rev Diff'}")
-    print("-" * 95)
+    print(f"{'Channel':<15} | {f'{policy_name} (PPM/Cent/Self/Rev)':<30} | {'Optimized (PPM/Cent/Self/Rev)':<30} | {'Rev Diff':<10} | {'Cent Diff'}")
+    print("-" * 110)
     
     for e in mynode_v.out_edges():
         ch_id = e_short_id[e]
@@ -169,13 +169,16 @@ def evaluate_revenue(mynode, input_json, seed=42, refresh_graph=False):
         rev_diff = opt_rev - curr_rev
         diff_str = f"+{rev_diff}" if rev_diff >= 0 else f"{rev_diff}"
         
+        cent_diff = opt_cent - curr_cent
+        cent_diff_str = f"+{cent_diff}" if cent_diff >= 0 else f"{cent_diff}"
+        
         curr_str = f"{curr_ppm} / {curr_cent} / {e_counts_curr[e]} / {curr_rev}"
         opt_str = f"{opt_ppm} / {opt_cent} / {e_counts_opt[e]} / {opt_rev}"
         
-        print(f"{ch_id:<15} | {curr_str:<30} | {opt_str:<30} | {diff_str}")
+        print(f"{ch_id:<15} | {curr_str:<30} | {opt_str:<30} | {diff_str:<10} | {cent_diff_str}")
         
-    print("-" * 95)
-    print(f"{'Total':<15} | {'- / ' + str(sum_cent_curr) + ' / - / ' + str(sum_rev_curr):<30} | {'- / ' + str(sum_cent_opt) + ' / - / ' + str(sum_rev_opt):<30} | {(sum_rev_opt - sum_rev_curr):+d}")
+    print("-" * 110)
+    print(f"{'Total':<15} | {'- / ' + str(sum_cent_curr) + ' / - / ' + str(sum_rev_curr):<30} | {'- / ' + str(sum_cent_opt) + ' / - / ' + str(sum_rev_opt):<30} | {(sum_rev_opt - sum_rev_curr):<+10d} | {(sum_cent_opt - sum_cent_curr):+d}")
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
