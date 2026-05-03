@@ -158,6 +158,8 @@ def run_centrality_sweep(mynode, input_csv=None, seed=42, refresh_graph=False):
         neg_potential, lower_ppm, upper_ppm, lower_cent = heapq.heappop(queue)
         potential = -neg_potential
         
+        logger.info(f"Exploring interval [{lower_ppm}, {upper_ppm}] with potential max revenue {potential}")
+        
         if potential <= best_total_revenue:
             logger.info(f"Terminating search: highest remaining potential ({potential}) is <= best found ({best_total_revenue})")
             break
