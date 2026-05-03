@@ -90,7 +90,62 @@ def run_centrality_sweep(mynode, input_csv=None, seed=42, refresh_graph=False):
     target_cent = sum(max(0, int(round(e_betw[e])) - e_counts[e]) for e in mynode_v.out_edges())
     logger.info(f"Target centrality (PPM=1M) is {target_cent}")
     
-    logger.info("Starting linear PPM scan...")
+    logger.info("Starting exponential search to find upper bound PPM...")
+    
+    lower_ppm = 1
+    upper_ppm = None
+    test_ppm = 1
+    max_ppm_bound = 1000000
+    
+    while True:
+        logger.info(f"Bounding search testing uniform PPM: {test_ppm}")
+        for e in mynode_v.out_edges():
+            e_fee_rate[e] = test_ppm
+            
+        for e in DG.edges():
+            a = e_base_fee[e]
+            b = e_fee_rate[e] / 1000000.0
+            e_weight[e] = math.floor(a + tx_sat_cent * b * 1000) + e_epsilon[e]
+            
+        _, e_betw_temp = gt.betweenness(DG, weight=e_weight, norm=False)
+        _, pred_map_temp = gt.shortest_distance(DG, source=mynode_v, weights=e_weight, pred_map=True)
+        e_counts_temp = DG.new_edge_property("int")
+        for v in DG.vertices():
+            if v == mynode_v:
+                continue
+            curr = v
+            while curr != mynode_v:
+                p = pred_map_temp[curr]
+                if p == int(curr):
+                    break
+                v_p = DG.vertex(p)
+                e_edge = DG.edge(v_p, curr)
+                if e_edge:
+                    e_counts_temp[e_edge] += 1
+                curr = v_p
+                
+        sum_cent_temp = sum(max(0, int(round(e_betw_temp[e])) - e_counts_temp[e]) for e in mynode_v.out_edges())
+        
+        if sum_cent_temp > target_cent:
+            lower_ppm = test_ppm
+            if upper_ppm is None:
+                test_ppm *= 2
+                if test_ppm >= max_ppm_bound:
+                    upper_ppm = max_ppm_bound
+                    break
+            else:
+                test_ppm = (lower_ppm + upper_ppm) // 2
+        else:
+            upper_ppm = test_ppm
+            test_ppm = (lower_ppm + upper_ppm) // 2
+            
+        if upper_ppm is not None and (upper_ppm - lower_ppm <= 1):
+            break
+            
+    upper_bound_ppm = upper_ppm if upper_ppm is not None else max_ppm_bound
+    logger.info(f"Upper bound PPM determined to be: {upper_bound_ppm}")
+
+    logger.info("Starting optimized linear PPM scan...")
     
     csv_file = "centrality_sweep_results.csv"
     with open(csv_file, mode='w', newline='') as f:
@@ -159,8 +214,17 @@ def run_centrality_sweep(mynode, input_csv=None, seed=42, refresh_graph=False):
             best_total_revenue = sum_rev
             best_ppm = current_ppm
             
+        max_possible_future_rev = sum_cent * upper_bound_ppm
+        if max_possible_future_rev <= best_total_revenue:
+            logger.info(f"Stopping early: Max possible future revenue ({max_possible_future_rev}) cannot exceed best seen ({best_total_revenue}).")
+            break
+            
         if sum_cent <= target_cent:
             logger.info(f"Centrality reached target ({sum_cent} <= {target_cent}). Stopping linear scan.")
+            break
+            
+        if current_ppm >= upper_bound_ppm:
+            logger.info("Reached upper bound PPM. Stopping linear scan.")
             break
             
         current_ppm += 1
