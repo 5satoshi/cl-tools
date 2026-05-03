@@ -187,19 +187,89 @@ def run_centrality_sweep(mynode, input_csv=None, seed=42, refresh_graph=False):
             heapq.heappush(queue, (-right_potential, mid_ppm, upper_ppm, mid_cent))
             
     logger.info(f"Search complete. Results completely saved to {csv_file}")
+    print(f"\n=== Best overall Total Revenue of {best_total_revenue} was achieved at uniform PPM {best_ppm} ===")
+
+    # --- Local Search for Individual Channel Optimization ---
+    logger.info("Starting individual channel optimization...")
     
-    best_ppms = {}
-    for row in results:
-        if row[0] == best_ppm:
-            best_ppms[row[1]] = row[0]
+    def evaluate_custom_ppms(ppm_dict):
+        for e in mynode_v.out_edges():
+            e_fee_rate[e] = ppm_dict[e]
+            
+        for e in DG.edges():
+            a = e_base_fee[e]
+            b = e_fee_rate[e] / 1000000.0
+            e_weight[e] = math.floor(a + tx_sat_cent * b * 1000) + e_epsilon[e]
+            
+        _, e_betw_temp = gt.betweenness(DG, weight=e_weight, norm=False)
+        _, pred_map_temp = gt.shortest_distance(DG, source=mynode_v, weights=e_weight, pred_map=True)
+        
+        e_counts_temp = DG.new_edge_property("int")
+        for v in DG.vertices():
+            if v == mynode_v: continue
+            curr = v
+            while curr != mynode_v:
+                p = pred_map_temp[curr]
+                if p == int(curr): break
+                v_p = DG.vertex(p)
+                e_edge = DG.edge(v_p, curr)
+                if e_edge: e_counts_temp[e_edge] += 1
+                curr = v_p
+                
+        sum_rev = 0
+        ch_revs = {}
+        for e in mynode_v.out_edges():
+            cent = max(0, int(round(e_betw_temp[e])) - e_counts_temp[e])
+            revenue = cent * ppm_dict[e]
+            sum_rev += revenue
+            ch_revs[e] = revenue
+        return sum_rev, ch_revs
+
+    current_ppms = {e: best_ppm for e in mynode_v.out_edges()}
+    curr_total_rev, channel_revenues = evaluate_custom_ppms(current_ppms)
+    
+    improved = True
+    while improved:
+        improved = False
+        sorted_edges = sorted(channel_revenues.keys(), key=lambda e: channel_revenues[e], reverse=True)
+        
+        for e in sorted_edges:
+            orig_ppm = current_ppms[e]
+            
+            # Try +1
+            current_ppms[e] = orig_ppm + 1
+            rev_plus, ch_rev_plus = evaluate_custom_ppms(current_ppms)
+            
+            # Try -1
+            rev_minus, ch_rev_minus = -1, {}
+            if orig_ppm > 0:
+                current_ppms[e] = orig_ppm - 1
+                rev_minus, ch_rev_minus = evaluate_custom_ppms(current_ppms)
+                
+            if rev_plus > curr_total_rev and rev_plus >= rev_minus:
+                current_ppms[e] = orig_ppm + 1
+                curr_total_rev, channel_revenues = rev_plus, ch_rev_plus
+                logger.info(f"Increased PPM on {e_short_id[e]} to {orig_ppm + 1}. New total revenue: {curr_total_rev}")
+                improved = True
+                break
+            elif rev_minus > curr_total_rev:
+                current_ppms[e] = orig_ppm - 1
+                curr_total_rev, channel_revenues = rev_minus, ch_rev_minus
+                logger.info(f"Decreased PPM on {e_short_id[e]} to {orig_ppm - 1}. New total revenue: {curr_total_rev}")
+                improved = True
+                break
+            else:
+                # No improvement, revert change
+                current_ppms[e] = orig_ppm
+                
+    best_ppms = {e_short_id[e]: current_ppms[e] for e in mynode_v.out_edges()}
             
     json_file = "best_ppms.json"
     with open(json_file, mode='w') as f:
         json.dump(best_ppms, f, indent=4)
         
-    logger.info(f"Best PPM settings saved to {json_file}")
-    
-    print(f"\n=== Best overall Total Revenue of {best_total_revenue} was achieved at uniform PPM {best_ppm} ===")
+    logger.info(f"Best individual PPM settings saved to {json_file}")
+    print(f"\n=== Final Optimized Total Revenue of {curr_total_rev} was achieved ===")
 
 
 if __name__ == "__main__":
