@@ -138,7 +138,7 @@ def run_centrality_sweep(mynode, input_csv=None, seed=42, refresh_graph=False):
             best_ppm = current_ppm
             
         # The potential max revenue for the interval [prev_ppm, current_ppm]
-        potential = prev_cent * current_ppm
+        potential = prev_cent * (current_ppm - 1)
         if potential > best_total_revenue and current_ppm - prev_ppm > 1:
             # Using negative for max-heap behavior
             heapq.heappush(queue, (-potential, prev_ppm, current_ppm, prev_cent))
@@ -177,13 +177,13 @@ def run_centrality_sweep(mynode, input_csv=None, seed=42, refresh_graph=False):
             best_ppm = mid_ppm
             
         # Left interval: [lower_ppm, mid_ppm]
-        left_potential = lower_cent * mid_ppm
-        if left_potential > best_total_revenue and mid_ppm - lower_ppm > 0:
+        left_potential = lower_cent * (mid_ppm - 1)
+        if left_potential > best_total_revenue and mid_ppm - lower_ppm > 1:
             heapq.heappush(queue, (-left_potential, lower_ppm, mid_ppm, lower_cent))
             
         # Right interval: [mid_ppm, upper_ppm]
-        right_potential = mid_cent * upper_ppm
-        if right_potential > best_total_revenue and upper_ppm - mid_ppm > 0:
+        right_potential = mid_cent * (upper_ppm - 1)
+        if right_potential > best_total_revenue and upper_ppm - mid_ppm > 1:
             heapq.heappush(queue, (-right_potential, mid_ppm, upper_ppm, mid_cent))
             
     logger.info(f"Search complete. Results completely saved to {csv_file}")
