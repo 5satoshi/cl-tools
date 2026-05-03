@@ -60,36 +60,6 @@ def run_centrality_sweep(mynode, input_csv=None, seed=42, refresh_graph=False):
     for e in DG.edges():
         e_epsilon[e] = random.uniform(0.0001, 0.00011)
         
-    logger.info("Computing target centrality at PPM = 1,000,000...")
-    for e in mynode_v.out_edges():
-        e_fee_rate[e] = 1000000
-        
-    for e in DG.edges():
-        a = e_base_fee[e]
-        b = e_fee_rate[e] / 1000000.0
-        e_weight[e] = math.floor(a + tx_sat_cent * b * 1000) + e_epsilon[e]
-        
-    _, e_betw = gt.betweenness(DG, weight=e_weight, norm=False)
-    
-    _, pred_map = gt.shortest_distance(DG, source=mynode_v, weights=e_weight, pred_map=True)
-    e_counts = DG.new_edge_property("int")
-    for v in DG.vertices():
-        if v == mynode_v:
-            continue
-        curr = v
-        while curr != mynode_v:
-            p = pred_map[curr]
-            if p == int(curr):
-                break
-            v_p = DG.vertex(p)
-            e_edge = DG.edge(v_p, curr)
-            if e_edge:
-                e_counts[e_edge] += 1
-            curr = v_p
-            
-    target_cent = sum(max(0, int(round(e_betw[e])) - e_counts[e]) for e in mynode_v.out_edges())
-    logger.info(f"Target centrality (PPM=1M) is {target_cent}")
-    
     csv_file = "centrality_sweep_results.csv"
     with open(csv_file, mode='w', newline='') as f:
         writer = csv.writer(f)
@@ -146,21 +116,42 @@ def run_centrality_sweep(mynode, input_csv=None, seed=42, refresh_graph=False):
     best_total_revenue = -1
     best_ppm = -1
     
+    logger.info("Starting exponential phase to discover intervals...")
     # Evaluate starting boundary
     cent_1, rev_1 = evaluate_ppm(1)
     if rev_1 > best_total_revenue:
         best_total_revenue = rev_1
         best_ppm = 1
         
-    # Queue stores tuples of (-max_potential_revenue, lower_ppm, upper_ppm, lower_cent)
-    # Using negative for max-heap behavior
     queue = []
+    
+    prev_ppm = 1
+    prev_cent = cent_1
+    current_ppm = 2
     max_ppm_bound = 1000000
     
-    # Start with the full interval [1, 1000000]
-    initial_potential = cent_1 * max_ppm_bound
-    heapq.heappush(queue, (-initial_potential, 1, max_ppm_bound, cent_1))
-    
+    while True:
+        curr_cent, curr_rev = evaluate_ppm(current_ppm)
+        
+        if curr_rev > best_total_revenue:
+            best_total_revenue = curr_rev
+            best_ppm = current_ppm
+            
+        # The potential max revenue for the interval [prev_ppm, current_ppm]
+        potential = prev_cent * current_ppm
+        if potential > best_total_revenue and current_ppm - prev_ppm > 1:
+            # Using negative for max-heap behavior
+            heapq.heappush(queue, (-potential, prev_ppm, current_ppm, prev_cent))
+            
+        if curr_cent == 0 or current_ppm >= max_ppm_bound:
+            break
+            
+        prev_ppm = current_ppm
+        prev_cent = curr_cent
+        current_ppm *= 2
+        if current_ppm > max_ppm_bound:
+            current_ppm = max_ppm_bound
+
     logger.info("Starting branch-and-bound interval search for maximum revenue...")
     
     while queue:
