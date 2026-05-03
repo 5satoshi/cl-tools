@@ -90,17 +90,15 @@ def run_centrality_sweep(mynode, input_csv=None, seed=42, refresh_graph=False):
     target_cent = sum(max(0, int(round(e_betw[e])) - e_counts[e]) for e in mynode_v.out_edges())
     logger.info(f"Target centrality (PPM=1M) is {target_cent}")
     
-    logger.info("Starting exponential search to find upper bound PPM...")
-    
-    lower_ppm = 1
-    upper_ppm = None
-    test_ppm = 1
-    max_ppm_bound = 1000000
-    
-    while True:
-        logger.info(f"Bounding search testing uniform PPM: {test_ppm}")
+    csv_file = "centrality_sweep_results.csv"
+    with open(csv_file, mode='w', newline='') as f:
+        writer = csv.writer(f)
+        writer.writerow(["PPM", "Channel", "Edge_Centrality", "Self_Paths", "Revenue_Potential"])
+
+    def evaluate_ppm(current_ppm):
+        logger.info(f"Evaluating uniform PPM: {current_ppm}")
         for e in mynode_v.out_edges():
-            e_fee_rate[e] = test_ppm
+            e_fee_rate[e] = current_ppm
             
         for e in DG.edges():
             a = e_base_fee[e]
@@ -109,98 +107,30 @@ def run_centrality_sweep(mynode, input_csv=None, seed=42, refresh_graph=False):
             
         _, e_betw_temp = gt.betweenness(DG, weight=e_weight, norm=False)
         _, pred_map_temp = gt.shortest_distance(DG, source=mynode_v, weights=e_weight, pred_map=True)
+        
         e_counts_temp = DG.new_edge_property("int")
         for v in DG.vertices():
-            if v == mynode_v:
-                continue
+            if v == mynode_v: continue
             curr = v
             while curr != mynode_v:
                 p = pred_map_temp[curr]
-                if p == int(curr):
-                    break
+                if p == int(curr): break
                 v_p = DG.vertex(p)
                 e_edge = DG.edge(v_p, curr)
-                if e_edge:
-                    e_counts_temp[e_edge] += 1
+                if e_edge: e_counts_temp[e_edge] += 1
                 curr = v_p
                 
-        sum_cent_temp = sum(max(0, int(round(e_betw_temp[e])) - e_counts_temp[e]) for e in mynode_v.out_edges())
-        
-        if sum_cent_temp > target_cent:
-            lower_ppm = test_ppm
-            if upper_ppm is None:
-                test_ppm *= 2
-                if test_ppm >= max_ppm_bound:
-                    upper_ppm = max_ppm_bound
-                    break
-            else:
-                test_ppm = (lower_ppm + upper_ppm) // 2
-        else:
-            upper_ppm = test_ppm
-            test_ppm = (lower_ppm + upper_ppm) // 2
-            
-        if upper_ppm is not None and (upper_ppm - lower_ppm <= 1):
-            break
-            
-    upper_bound_ppm = upper_ppm if upper_ppm is not None else max_ppm_bound
-    logger.info(f"Upper bound PPM determined to be: {upper_bound_ppm}")
-
-    logger.info("Starting optimized linear PPM scan...")
-    
-    csv_file = "centrality_sweep_results.csv"
-    with open(csv_file, mode='w', newline='') as f:
-        writer = csv.writer(f)
-        writer.writerow(["PPM", "Channel", "Edge_Centrality", "Self_Paths", "Revenue_Potential"])
-        
-    best_total_revenue = -1
-    best_ppm = -1
-    current_ppm = 1
-    
-    while True:
-        logger.info(f"Evaluating uniform PPM: {current_ppm}")
-        
-        # Update mynode out-edges PPM uniformly
-        for e in mynode_v.out_edges():
-            e_fee_rate[e] = current_ppm
-            
-        # Compute edge weights for the whole graph based on 80k sat tx
-        for e in DG.edges():
-            a = e_base_fee[e]
-            b = e_fee_rate[e] / 1000000.0
-            e_weight[e] = math.floor(a + tx_sat_cent * b * 1000) + e_epsilon[e]
-            
-        # Compute betweenness
-        _, e_betw = gt.betweenness(DG, weight=e_weight, norm=False)
-        
-        _, pred_map = gt.shortest_distance(DG, source=mynode_v, weights=e_weight, pred_map=True)
-        e_counts = DG.new_edge_property("int")
-        for v in DG.vertices():
-            if v == mynode_v:
-                continue
-            curr = v
-            while curr != mynode_v:
-                p = pred_map[curr]
-                if p == int(curr):
-                    break
-                v_p = DG.vertex(p)
-                e_edge = DG.edge(v_p, curr)
-                if e_edge:
-                    e_counts[e_edge] += 1
-                curr = v_p
-        
         sum_cent = 0
         sum_rev = 0
-        
         iteration_results = []
+        
         for e in mynode_v.out_edges():
             ch_id = e_short_id[e]
-            cent = max(0, int(round(e_betw[e])) - e_counts[e])
+            cent = max(0, int(round(e_betw_temp[e])) - e_counts_temp[e])
             revenue = cent * current_ppm
-            
             sum_cent += cent
             sum_rev += revenue
-            
-            row = [current_ppm, ch_id, f"{cent}", f"{e_counts[e]}", f"{revenue}"]
+            row = [current_ppm, ch_id, f"{cent}", f"{e_counts_temp[e]}", f"{revenue}"]
             results.append(row)
             iteration_results.append(row)
             
@@ -209,27 +139,61 @@ def run_centrality_sweep(mynode, input_csv=None, seed=42, refresh_graph=False):
             writer.writerows(iteration_results)
             
         logger.info(f"Uniform PPM {current_ppm} completed | Sum Centrality: {sum_cent} | Total Revenue: {sum_rev}")
+        return sum_cent, sum_rev
+
+    import heapq
+    
+    best_total_revenue = -1
+    best_ppm = -1
+    
+    # Evaluate starting boundary
+    cent_1, rev_1 = evaluate_ppm(1)
+    if rev_1 > best_total_revenue:
+        best_total_revenue = rev_1
+        best_ppm = 1
         
-        if sum_rev > best_total_revenue:
-            best_total_revenue = sum_rev
-            best_ppm = current_ppm
-            
-        max_possible_future_rev = sum_cent * upper_bound_ppm
-        if max_possible_future_rev <= best_total_revenue:
-            logger.info(f"Stopping early: Max possible future revenue ({max_possible_future_rev}) cannot exceed best seen ({best_total_revenue}).")
+    # Queue stores tuples of (-max_potential_revenue, lower_ppm, upper_ppm, lower_cent)
+    # Using negative for max-heap behavior
+    queue = []
+    max_ppm_bound = 1000000
+    
+    # Start with the full interval [1, 1000000]
+    initial_potential = cent_1 * max_ppm_bound
+    heapq.heappush(queue, (-initial_potential, 1, max_ppm_bound, cent_1))
+    
+    logger.info("Starting branch-and-bound interval search for maximum revenue...")
+    
+    while queue:
+        neg_potential, lower_ppm, upper_ppm, lower_cent = heapq.heappop(queue)
+        potential = -neg_potential
+        
+        if potential <= best_total_revenue:
+            logger.info(f"Terminating search: highest remaining potential ({potential}) is <= best found ({best_total_revenue})")
             break
             
-        if sum_cent <= target_cent:
-            logger.info(f"Centrality reached target ({sum_cent} <= {target_cent}). Stopping linear scan.")
-            break
+        if upper_ppm - lower_ppm <= 1:
+            continue
             
-        if current_ppm >= upper_bound_ppm:
-            logger.info("Reached upper bound PPM. Stopping linear scan.")
-            break
+        mid_ppm = (lower_ppm + upper_ppm) // 2
+        
+        # Evaluate midpoint
+        mid_cent, mid_rev = evaluate_ppm(mid_ppm)
+        
+        if mid_rev > best_total_revenue:
+            best_total_revenue = mid_rev
+            best_ppm = mid_ppm
             
-        current_ppm += 1
+        # Left interval: [lower_ppm, mid_ppm]
+        left_potential = lower_cent * mid_ppm
+        if left_potential > best_total_revenue and mid_ppm - lower_ppm > 0:
+            heapq.heappush(queue, (-left_potential, lower_ppm, mid_ppm, lower_cent))
             
-    logger.info(f"Results completely saved to {csv_file}")
+        # Right interval: [mid_ppm, upper_ppm]
+        right_potential = mid_cent * upper_ppm
+        if right_potential > best_total_revenue and upper_ppm - mid_ppm > 0:
+            heapq.heappush(queue, (-right_potential, mid_ppm, upper_ppm, mid_cent))
+            
+    logger.info(f"Search complete. Results completely saved to {csv_file}")
     
     best_ppms = {}
     for row in results:
