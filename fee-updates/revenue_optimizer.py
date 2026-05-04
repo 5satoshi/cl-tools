@@ -264,6 +264,25 @@ def run_centrality_sweep(mynode, input_csv=None, seed=42, refresh_graph=False):
     improved = True
     while improved:
         improved = False
+        
+        # Avoid channels being stuck with 0 revenue
+        for e in mynode_v.out_edges():
+            if channel_revenues[e] == 0 and current_ppms[e] > 0:
+                orig_ppm = current_ppms[e]
+                while current_ppms[e] > 0:
+                    current_ppms[e] -= 1
+                    temp_rev, temp_ch_rev = evaluate_custom_ppms(current_ppms)
+                    if temp_ch_rev[e] > 0:
+                        curr_total_rev, channel_revenues = temp_rev, temp_ch_rev
+                        logger.info(f"Restored revenue on {e_short_id[e]} by reducing PPM to {current_ppms[e]}")
+                        improved = True
+                        break
+                if channel_revenues[e] == 0:
+                    current_ppms[e] = orig_ppm
+
+        if improved:
+            continue
+
         sorted_edges = sorted(channel_revenues.keys(), key=lambda e: channel_revenues[e], reverse=True)
         curr_score = (curr_total_rev, sum(1 for v in channel_revenues.values() if v > 0))
         
