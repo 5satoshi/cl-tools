@@ -273,17 +273,23 @@ def run_centrality_sweep(mynode, input_csv=None, seed=42, refresh_graph=False):
                                     if other_e != e and ch_rev_minus[other_e] == 0 and channel_revenues[other_e] > 0 and current_ppms[other_e] > 0]
                 
                 if dropped_channels:
+                    orig_dropped_ppms = {other_e: current_ppms[other_e] for other_e in dropped_channels}
+                    
                     for other_e in dropped_channels:
-                        current_ppms[other_e] -= 1
-                        
+                        while current_ppms[other_e] > 0:
+                            current_ppms[other_e] -= 1
+                            temp_rev, temp_ch_rev = evaluate_custom_ppms(current_ppms)
+                            if temp_ch_rev[other_e] > 0:
+                                break
+                                
                     rev_combined, ch_rev_combined = evaluate_custom_ppms(current_ppms)
                     
                     if rev_combined >= rev_minus:
                         curr_total_rev, channel_revenues = rev_combined, ch_rev_combined
-                        logger.info(f"Decreased PPM on {e_short_id[e]} to {orig_ppm - 1} AND {len(dropped_channels)} affected channels. New total revenue: {curr_total_rev}")
+                        logger.info(f"Decreased PPM on {e_short_id[e]} to {orig_ppm - 1} AND adjusted {len(dropped_channels)} affected channels. New total revenue: {curr_total_rev}")
                     else:
                         for other_e in dropped_channels:
-                            current_ppms[other_e] += 1
+                            current_ppms[other_e] = orig_dropped_ppms[other_e]
                         curr_total_rev, channel_revenues = rev_minus, ch_rev_minus
                         logger.info(f"Decreased PPM on {e_short_id[e]} to {orig_ppm - 1}. New total revenue: {curr_total_rev}")
                 else:
