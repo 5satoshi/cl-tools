@@ -266,22 +266,29 @@ def run_centrality_sweep(mynode, input_csv=None, seed=42, refresh_graph=False):
         improved = False
         
         # Avoid channels being stuck with 0 revenue
-        for e in mynode_v.out_edges():
-            if channel_revenues[e] == 0 and current_ppms[e] > 0:
-                orig_ppm = current_ppms[e]
-                while current_ppms[e] > 0:
+        zero_channels = [e for e in mynode_v.out_edges() if channel_revenues[e] == 0 and current_ppms[e] > 0]
+        if zero_channels:
+            orig_zero_ppms = {e: current_ppms[e] for e in zero_channels}
+            active_zeros = zero_channels[:]
+            
+            while active_zeros:
+                for e in active_zeros:
                     current_ppms[e] -= 1
-                    temp_rev, temp_ch_rev = evaluate_custom_ppms(current_ppms)
-                    if temp_ch_rev[e] > 0:
-                        curr_total_rev, channel_revenues = temp_rev, temp_ch_rev
-                        logger.info(f"Restored revenue on {e_short_id[e]} by reducing PPM to {current_ppms[e]}")
-                        improved = True
-                        break
-                if channel_revenues[e] == 0:
-                    current_ppms[e] = orig_ppm
-
-        if improved:
-            continue
+                    
+                temp_rev, temp_ch_rev = evaluate_custom_ppms(current_ppms)
+                
+                active_zeros = [e for e in active_zeros if temp_ch_rev[e] == 0 and current_ppms[e] > 0]
+                
+            for e in zero_channels:
+                if temp_ch_rev[e] == 0:
+                    current_ppms[e] = orig_zero_ppms[e]
+                else:
+                    improved = True
+                    logger.info(f"Restored revenue on {e_short_id[e]} by reducing PPM to {current_ppms[e]}")
+                    
+            if improved:
+                curr_total_rev, channel_revenues = evaluate_custom_ppms(current_ppms)
+                continue
 
         sorted_edges = sorted(channel_revenues.keys(), key=lambda e: channel_revenues[e], reverse=True)
         curr_score = (curr_total_rev, sum(1 for v in channel_revenues.values() if v > 0))
