@@ -95,6 +95,7 @@ def run_centrality_sweep(mynode, input_csv=None, seed=42, refresh_graph=False):
                 
         sum_cent = 0
         sum_rev = 0
+        active_channels = 0
         iteration_results = []
         
         for e in mynode_v.out_edges():
@@ -103,6 +104,8 @@ def run_centrality_sweep(mynode, input_csv=None, seed=42, refresh_graph=False):
             revenue = cent * current_ppm
             sum_cent += cent
             sum_rev += revenue
+            if revenue > 0:
+                active_channels += 1
             row = [run_counter[0], ch_id, current_ppm, f"{cent}", f"{e_counts_temp[e]}", f"{revenue}"]
             results.append(row)
             iteration_results.append(row)
@@ -111,19 +114,21 @@ def run_centrality_sweep(mynode, input_csv=None, seed=42, refresh_graph=False):
             writer = csv.writer(f)
             writer.writerows(iteration_results)
             
-        logger.info(f"Uniform PPM {current_ppm} completed | Sum Centrality: {sum_cent} | Total Revenue: {sum_rev}")
-        return sum_cent, sum_rev
+        logger.info(f"Uniform PPM {current_ppm} completed | Sum Centrality: {sum_cent} | Total Revenue: {sum_rev} | Active Channels: {active_channels}")
+        return sum_cent, sum_rev, active_channels
 
     import heapq
     
     best_total_revenue = -1
+    best_active_channels = -1
     best_ppm = -1
     
     logger.info("Starting exponential phase to discover intervals...")
     # Evaluate starting boundary
-    cent_1, rev_1 = evaluate_ppm(1)
-    if rev_1 > best_total_revenue:
+    cent_1, rev_1, act_1 = evaluate_ppm(1)
+    if (rev_1, act_1) > (best_total_revenue, best_active_channels):
         best_total_revenue = rev_1
+        best_active_channels = act_1
         best_ppm = 1
         
     queue = []
@@ -134,10 +139,11 @@ def run_centrality_sweep(mynode, input_csv=None, seed=42, refresh_graph=False):
     max_ppm_bound = 1000000
     
     while True:
-        curr_cent, curr_rev = evaluate_ppm(current_ppm)
+        curr_cent, curr_rev, curr_act = evaluate_ppm(current_ppm)
         
-        if curr_rev > best_total_revenue:
+        if (curr_rev, curr_act) > (best_total_revenue, best_active_channels):
             best_total_revenue = curr_rev
+            best_active_channels = curr_act
             best_ppm = current_ppm
             
         # The potential max revenue for the interval [prev_ppm, current_ppm]
@@ -173,10 +179,11 @@ def run_centrality_sweep(mynode, input_csv=None, seed=42, refresh_graph=False):
         mid_ppm = (lower_ppm + upper_ppm) // 2
         
         # Evaluate midpoint
-        mid_cent, mid_rev = evaluate_ppm(mid_ppm)
+        mid_cent, mid_rev, mid_act = evaluate_ppm(mid_ppm)
         
-        if mid_rev > best_total_revenue:
+        if (mid_rev, mid_act) > (best_total_revenue, best_active_channels):
             best_total_revenue = mid_rev
+            best_active_channels = mid_act
             best_ppm = mid_ppm
             
         # Left interval: [lower_ppm, mid_ppm]
@@ -246,6 +253,7 @@ def run_centrality_sweep(mynode, input_csv=None, seed=42, refresh_graph=False):
     while improved:
         improved = False
         sorted_edges = sorted(channel_revenues.keys(), key=lambda e: channel_revenues[e], reverse=True)
+        curr_score = (curr_total_rev, sum(1 for v in channel_revenues.values() if v > 0))
         
         for e in sorted_edges:
             orig_ppm = current_ppms[e]
@@ -253,20 +261,24 @@ def run_centrality_sweep(mynode, input_csv=None, seed=42, refresh_graph=False):
             # Try +1
             current_ppms[e] = orig_ppm + 1
             rev_plus, ch_rev_plus = evaluate_custom_ppms(current_ppms)
+            plus_score = (rev_plus, sum(1 for v in ch_rev_plus.values() if v > 0))
             
             # Try -1
             rev_minus, ch_rev_minus = -1, {}
+            minus_score = (-1, -1)
             if orig_ppm > 0:
                 current_ppms[e] = orig_ppm - 1
                 rev_minus, ch_rev_minus = evaluate_custom_ppms(current_ppms)
+                minus_score = (rev_minus, sum(1 for v in ch_rev_minus.values() if v > 0))
                 
-            if rev_plus > curr_total_rev and rev_plus >= rev_minus:
+            if plus_score > curr_score and plus_score >= minus_score:
                 current_ppms[e] = orig_ppm + 1
                 curr_total_rev, channel_revenues = rev_plus, ch_rev_plus
+                curr_score = plus_score
                 logger.info(f"Increased PPM on {e_short_id[e]} to {orig_ppm + 1}. New total revenue: {curr_total_rev}")
                 improved = True
                 break
-            elif rev_minus > curr_total_rev:
+            elif minus_score > curr_score:
                 current_ppms[e] = orig_ppm - 1
                 
                 dropped_channels = [other_e for other_e in mynode_v.out_edges() 
@@ -285,17 +297,21 @@ def run_centrality_sweep(mynode, input_csv=None, seed=42, refresh_graph=False):
                         active_dropped = [other_e for other_e in active_dropped if temp_ch_rev[other_e] == 0 and current_ppms[other_e] > 0]
                                 
                     rev_combined, ch_rev_combined = temp_rev, temp_ch_rev
+                    combined_score = (rev_combined, sum(1 for v in ch_rev_combined.values() if v > 0))
                     
-                    if rev_combined >= rev_minus:
+                    if combined_score >= minus_score:
                         curr_total_rev, channel_revenues = rev_combined, ch_rev_combined
+                        curr_score = combined_score
                         logger.info(f"Decreased PPM on {e_short_id[e]} to {orig_ppm - 1} AND adjusted {len(dropped_channels)} affected channels. New total revenue: {curr_total_rev}")
                     else:
                         for other_e in dropped_channels:
                             current_ppms[other_e] = orig_dropped_ppms[other_e]
                         curr_total_rev, channel_revenues = rev_minus, ch_rev_minus
+                        curr_score = minus_score
                         logger.info(f"Decreased PPM on {e_short_id[e]} to {orig_ppm - 1}. New total revenue: {curr_total_rev}")
                 else:
                     curr_total_rev, channel_revenues = rev_minus, ch_rev_minus
+                    curr_score = minus_score
                     logger.info(f"Decreased PPM on {e_short_id[e]} to {orig_ppm - 1}. New total revenue: {curr_total_rev}")
                     
                 improved = True
