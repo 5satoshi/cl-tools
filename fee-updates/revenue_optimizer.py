@@ -218,11 +218,20 @@ def run_centrality_sweep(mynode, input_csv=None, seed=42, refresh_graph=False):
                 
         sum_rev = 0
         ch_revs = {}
+        iteration_results = []
         for e in mynode_v.out_edges():
+            ch_id = e_short_id[e]
             cent = max(0, int(round(e_betw_temp[e])) - e_counts_temp[e])
             revenue = cent * ppm_dict[e]
             sum_rev += revenue
             ch_revs[e] = revenue
+            row = [ppm_dict[e], ch_id, f"{cent}", f"{e_counts_temp[e]}", f"{revenue}"]
+            iteration_results.append(row)
+            
+        with open(csv_file, mode='a', newline='') as f:
+            writer = csv.writer(f)
+            writer.writerows(iteration_results)
+            
         return sum_rev, ch_revs
 
     current_ppms = {e: best_ppm for e in mynode_v.out_edges()}
