@@ -265,7 +265,7 @@ def run_centrality_sweep(mynode, input_csv=None, seed=42, refresh_graph=False):
                 current_ppms[e] = orig_ppm - 1
                 
                 dropped_channels = [other_e for other_e in mynode_v.out_edges() 
-                                    if other_e != e and ch_rev_minus[other_e] < channel_revenues[other_e] and current_ppms[other_e] > 0]
+                                    if other_e != e and ch_rev_minus[other_e] == 0 and channel_revenues[other_e] > 0 and current_ppms[other_e] > 0]
                 
                 if dropped_channels:
                     for other_e in dropped_channels:
