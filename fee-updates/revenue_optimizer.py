@@ -63,9 +63,12 @@ def run_centrality_sweep(mynode, input_csv=None, seed=42, refresh_graph=False):
     csv_file = "centrality_sweep_results.csv"
     with open(csv_file, mode='w', newline='') as f:
         writer = csv.writer(f)
-        writer.writerow(["PPM", "Channel", "Edge_Centrality", "Self_Paths", "Revenue_Potential"])
+        writer.writerow(["Run_Number", "Channel", "PPM", "Edge_Centrality", "Self_Paths", "Revenue_Potential"])
+
+    run_counter = [0]
 
     def evaluate_ppm(current_ppm):
+        run_counter[0] += 1
         logger.info(f"Evaluating uniform PPM: {current_ppm}")
         for e in mynode_v.out_edges():
             e_fee_rate[e] = current_ppm
@@ -100,7 +103,7 @@ def run_centrality_sweep(mynode, input_csv=None, seed=42, refresh_graph=False):
             revenue = cent * current_ppm
             sum_cent += cent
             sum_rev += revenue
-            row = [current_ppm, ch_id, f"{cent}", f"{e_counts_temp[e]}", f"{revenue}"]
+            row = [run_counter[0], ch_id, current_ppm, f"{cent}", f"{e_counts_temp[e]}", f"{revenue}"]
             results.append(row)
             iteration_results.append(row)
             
@@ -193,6 +196,7 @@ def run_centrality_sweep(mynode, input_csv=None, seed=42, refresh_graph=False):
     logger.info("Starting individual channel optimization...")
     
     def evaluate_custom_ppms(ppm_dict):
+        run_counter[0] += 1
         for e in mynode_v.out_edges():
             e_fee_rate[e] = ppm_dict[e]
             
@@ -225,7 +229,7 @@ def run_centrality_sweep(mynode, input_csv=None, seed=42, refresh_graph=False):
             revenue = cent * ppm_dict[e]
             sum_rev += revenue
             ch_revs[e] = revenue
-            row = [ppm_dict[e], ch_id, f"{cent}", f"{e_counts_temp[e]}", f"{revenue}"]
+            row = [run_counter[0], ch_id, ppm_dict[e], f"{cent}", f"{e_counts_temp[e]}", f"{revenue}"]
             iteration_results.append(row)
             
         with open(csv_file, mode='a', newline='') as f:
@@ -237,6 +241,7 @@ def run_centrality_sweep(mynode, input_csv=None, seed=42, refresh_graph=False):
     current_ppms = {e: best_ppm for e in mynode_v.out_edges()}
     curr_total_rev, channel_revenues = evaluate_custom_ppms(current_ppms)
     
+    json_file = "best_ppms.json"
     improved = True
     while improved:
         improved = False
@@ -291,9 +296,12 @@ def run_centrality_sweep(mynode, input_csv=None, seed=42, refresh_graph=False):
                 # No improvement, revert change
                 current_ppms[e] = orig_ppm
                 
+        if improved:
+            with open(json_file, mode='w') as f:
+                json.dump({e_short_id[edge]: current_ppms[edge] for edge in mynode_v.out_edges()}, f, indent=4)
+                
     best_ppms = {e_short_id[e]: current_ppms[e] for e in mynode_v.out_edges()}
             
-    json_file = "best_ppms.json"
     with open(json_file, mode='w') as f:
         json.dump(best_ppms, f, indent=4)
         
