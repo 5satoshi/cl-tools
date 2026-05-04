@@ -275,14 +275,16 @@ def run_centrality_sweep(mynode, input_csv=None, seed=42, refresh_graph=False):
                 if dropped_channels:
                     orig_dropped_ppms = {other_e: current_ppms[other_e] for other_e in dropped_channels}
                     
-                    for other_e in dropped_channels:
-                        while current_ppms[other_e] > 0:
+                    active_dropped = dropped_channels[:]
+                    while active_dropped:
+                        for other_e in active_dropped:
                             current_ppms[other_e] -= 1
-                            temp_rev, temp_ch_rev = evaluate_custom_ppms(current_ppms)
-                            if temp_ch_rev[other_e] > 0:
-                                break
+                            
+                        temp_rev, temp_ch_rev = evaluate_custom_ppms(current_ppms)
+                        
+                        active_dropped = [other_e for other_e in active_dropped if temp_ch_rev[other_e] == 0 and current_ppms[other_e] > 0]
                                 
-                    rev_combined, ch_rev_combined = evaluate_custom_ppms(current_ppms)
+                    rev_combined, ch_rev_combined = temp_rev, temp_ch_rev
                     
                     if rev_combined >= rev_minus:
                         curr_total_rev, channel_revenues = rev_combined, ch_rev_combined
