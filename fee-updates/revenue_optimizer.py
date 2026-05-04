@@ -66,8 +66,12 @@ def run_centrality_sweep(mynode, input_csv=None, seed=42, refresh_graph=False):
         writer.writerow(["Run_Number", "Channel", "PPM", "Edge_Centrality", "Self_Paths", "Revenue_Potential"])
 
     run_counter = [0]
+    evaluated_uniform_cache = {}
 
     def evaluate_ppm(current_ppm):
+        if current_ppm in evaluated_uniform_cache:
+            return evaluated_uniform_cache[current_ppm]
+            
         run_counter[0] += 1
         logger.info(f"Evaluating uniform PPM: {current_ppm}")
         for e in mynode_v.out_edges():
@@ -115,6 +119,7 @@ def run_centrality_sweep(mynode, input_csv=None, seed=42, refresh_graph=False):
             writer.writerows(iteration_results)
             
         logger.info(f"Uniform PPM {current_ppm} completed | Sum Centrality: {sum_cent} | Total Revenue: {sum_rev} | Active Channels: {active_channels}")
+        evaluated_uniform_cache[current_ppm] = (sum_cent, sum_rev, active_channels)
         return sum_cent, sum_rev, active_channels
 
     import heapq
@@ -202,7 +207,13 @@ def run_centrality_sweep(mynode, input_csv=None, seed=42, refresh_graph=False):
     # --- Local Search for Individual Channel Optimization ---
     logger.info("Starting individual channel optimization...")
     
+    evaluated_ppms_cache = {}
+    
     def evaluate_custom_ppms(ppm_dict):
+        cache_key = tuple(sorted((e_short_id[e], ppm_dict[e]) for e in mynode_v.out_edges()))
+        if cache_key in evaluated_ppms_cache:
+            return evaluated_ppms_cache[cache_key]
+            
         run_counter[0] += 1
         for e in mynode_v.out_edges():
             e_fee_rate[e] = ppm_dict[e]
@@ -243,6 +254,7 @@ def run_centrality_sweep(mynode, input_csv=None, seed=42, refresh_graph=False):
             writer = csv.writer(f)
             writer.writerows(iteration_results)
             
+        evaluated_ppms_cache[cache_key] = (sum_rev, ch_revs)
         return sum_rev, ch_revs
 
     current_ppms = {e: best_ppm for e in mynode_v.out_edges()}
