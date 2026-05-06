@@ -63,7 +63,7 @@ def run_centrality_sweep(mynode, input_csv=None, seed=42, refresh_graph=False):
     csv_file = "centrality_sweep_results.csv"
     with open(csv_file, mode='w', newline='') as f:
         writer = csv.writer(f)
-        writer.writerow(["Run_Number", "Channel", "PPM", "Edge_Centrality", "Self_Paths", "Revenue_Potential"])
+        writer.writerow(["Run_Number", "Channel", "PPM", "Edge_Centrality", "from_paths", "Revenue_Potential", "Score"])
 
     run_counter = [0]
     evaluated_uniform_cache = {}
@@ -99,18 +99,28 @@ def run_centrality_sweep(mynode, input_csv=None, seed=42, refresh_graph=False):
                 
         sum_cent = 0
         sum_rev = 0
+        sum_score = 0
         active_channels = 0
         iteration_results = []
         
         for e in mynode_v.out_edges():
             ch_id = e_short_id[e]
-            cent = max(0, int(round(e_betw_temp[e])) - e_counts_temp[e])
+            from_paths = e_counts_temp[e]
+            cent = max(0, int(round(e_betw_temp[e])) - from_paths)
+            to_paths = cent / from_paths if from_paths > 0 else 0
+            min_paths = min(from_paths, to_paths)
+            
             revenue = cent * current_ppm
+            std_dev_cent = cent / math.sqrt(min_paths) if min_paths > 0 else cent
+            std_dev_rev = std_dev_cent * current_ppm
+            score = revenue - std_dev_rev
+            
             sum_cent += cent
             sum_rev += revenue
+            sum_score += score
             if revenue > 0:
                 active_channels += 1
-            row = [run_counter[0], ch_id, current_ppm, f"{cent}", f"{e_counts_temp[e]}", f"{revenue}"]
+            row = [run_counter[0], ch_id, current_ppm, f"{cent}", f"{from_paths}", f"{revenue}", f"{score}"]
             results.append(row)
             iteration_results.append(row)
             
