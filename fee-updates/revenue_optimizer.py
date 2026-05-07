@@ -18,7 +18,7 @@ logging.basicConfig(
 logger = logging.getLogger("RouteFinder")
 
 
-def run_centrality_sweep(mynode, input_csv=None, seed=42, refresh_graph=False):
+def run_centrality_sweep(mynode, input_csv=None, seed=42, refresh_graph=False, optimize_for="revenue"):
     random.seed(seed)
     
     rpc = os.environ.get('HOME', '')+"/.lightning/bitcoin/lightning-rpc"
@@ -130,20 +130,26 @@ def run_centrality_sweep(mynode, input_csv=None, seed=42, refresh_graph=False):
             writer.writerows(iteration_results)
             
         logger.info(f"Uniform PPM {current_ppm} completed | Sum Centrality: {sum_cent} | Total Revenue: {sum_rev} | Total Score: {sum_score:.2f} | Active Channels: {active_channels}")
-        evaluated_uniform_cache[current_ppm] = (sum_cent, sum_rev, active_channels)
-        return sum_cent, sum_rev, active_channels
+        evaluated_uniform_cache[current_ppm] = (sum_cent, sum_rev, sum_score, active_channels)
+        return sum_cent, sum_rev, sum_score, active_channels
 
     import heapq
     
-    best_total_revenue = -1
+    def get_target(cent, rev, score):
+        if optimize_for == "cent": return cent
+        if optimize_for == "score": return score
+        return rev
+        
+    best_target_val = -1
     best_active_channels = -1
     best_ppm = -1
     
-    logger.info("Starting exponential phase to discover intervals...")
+    logger.info(f"Starting exponential phase to discover intervals optimizing for {optimize_for}...")
     # Evaluate starting boundary
-    cent_1, rev_1, act_1 = evaluate_ppm(1)
-    if (rev_1, act_1) > (best_total_revenue, best_active_channels):
-        best_total_revenue = rev_1
+    cent_1, rev_1, score_1, act_1 = evaluate_ppm(1)
+    target_1 = get_target(cent_1, rev_1, score_1)
+    if (target_1, act_1) > (best_target_val, best_active_channels):
+        best_target_val = target_1
         best_active_channels = act_1
         best_ppm = 1
         
@@ -155,16 +161,21 @@ def run_centrality_sweep(mynode, input_csv=None, seed=42, refresh_graph=False):
     max_ppm_bound = 1000000
     
     while True:
-        curr_cent, curr_rev, curr_act = evaluate_ppm(current_ppm)
+        curr_cent, curr_rev, curr_score, curr_act = evaluate_ppm(current_ppm)
+        curr_target = get_target(curr_cent, curr_rev, curr_score)
         
-        if (curr_rev, curr_act) > (best_total_revenue, best_active_channels):
-            best_total_revenue = curr_rev
+        if (curr_target, curr_act) > (best_target_val, best_active_channels):
+            best_target_val = curr_target
             best_active_channels = curr_act
             best_ppm = current_ppm
             
-        # The potential max revenue for the interval [prev_ppm, current_ppm]
-        potential = prev_cent * (current_ppm - 1)
-        if potential > best_total_revenue and current_ppm - prev_ppm > 1:
+        # The potential max for the interval [prev_ppm, current_ppm]
+        if optimize_for == "cent":
+            potential = prev_cent
+        else:
+            potential = prev_cent * (current_ppm - 1)
+            
+        if potential > best_target_val and current_ppm - prev_ppm > 1:
             # Using negative for max-heap behavior
             heapq.heappush(queue, (-potential, prev_ppm, current_ppm, prev_cent))
             
@@ -183,10 +194,10 @@ def run_centrality_sweep(mynode, input_csv=None, seed=42, refresh_graph=False):
         neg_potential, lower_ppm, upper_ppm, lower_cent = heapq.heappop(queue)
         potential = -neg_potential
         
-        logger.info(f"Exploring interval [{lower_ppm}, {upper_ppm}] with potential max revenue {potential}")
+        logger.info(f"Exploring interval [{lower_ppm}, {upper_ppm}] with potential max {optimize_for} {potential}")
         
-        if potential <= best_total_revenue:
-            logger.info(f"Terminating search: highest remaining potential ({potential}) is <= best found ({best_total_revenue})")
+        if potential <= best_target_val:
+            logger.info(f"Terminating search: highest remaining potential ({potential}) is <= best found ({best_target_val})")
             break
             
         if upper_ppm - lower_ppm <= 1:
@@ -195,25 +206,26 @@ def run_centrality_sweep(mynode, input_csv=None, seed=42, refresh_graph=False):
         mid_ppm = (lower_ppm + upper_ppm) // 2
         
         # Evaluate midpoint
-        mid_cent, mid_rev, mid_act = evaluate_ppm(mid_ppm)
+        mid_cent, mid_rev, mid_score, mid_act = evaluate_ppm(mid_ppm)
+        mid_target = get_target(mid_cent, mid_rev, mid_score)
         
-        if (mid_rev, mid_act) > (best_total_revenue, best_active_channels):
-            best_total_revenue = mid_rev
+        if (mid_target, mid_act) > (best_target_val, best_active_channels):
+            best_target_val = mid_target
             best_active_channels = mid_act
             best_ppm = mid_ppm
             
         # Left interval: [lower_ppm, mid_ppm]
-        left_potential = lower_cent * (mid_ppm - 1)
-        if left_potential > best_total_revenue and mid_ppm - lower_ppm > 1:
+        left_potential = lower_cent if optimize_for == "cent" else lower_cent * (mid_ppm - 1)
+        if left_potential > best_target_val and mid_ppm - lower_ppm > 1:
             heapq.heappush(queue, (-left_potential, lower_ppm, mid_ppm, lower_cent))
             
         # Right interval: [mid_ppm, upper_ppm]
-        right_potential = mid_cent * (upper_ppm - 1)
-        if right_potential > best_total_revenue and upper_ppm - mid_ppm > 1:
+        right_potential = mid_cent if optimize_for == "cent" else mid_cent * (upper_ppm - 1)
+        if right_potential > best_target_val and upper_ppm - mid_ppm > 1:
             heapq.heappush(queue, (-right_potential, mid_ppm, upper_ppm, mid_cent))
             
     logger.info(f"Search complete. Results completely saved to {csv_file}")
-    print(f"\n=== Best overall Total Revenue of {best_total_revenue} was achieved at uniform PPM {best_ppm} ===")
+    print(f"\n=== Best overall {optimize_for} of {best_target_val} was achieved at uniform PPM {best_ppm} ===")
 
     # --- Local Search for Individual Channel Optimization ---
     logger.info("Starting individual channel optimization...")
@@ -249,9 +261,10 @@ def run_centrality_sweep(mynode, input_csv=None, seed=42, refresh_graph=False):
                 if e_edge: e_counts_temp[e_edge] += 1
                 curr = v_p
                 
+        sum_cent = 0
         sum_rev = 0
         sum_score = 0
-        ch_revs = {}
+        ch_targets = {}
         iteration_results = []
         for e in mynode_v.out_edges():
             ch_id = e_short_id[e]
@@ -266,9 +279,13 @@ def run_centrality_sweep(mynode, input_csv=None, seed=42, refresh_graph=False):
             revenue = cent * ppm_dict[e]
             score = adj_cent * ppm_dict[e]
             
+            sum_cent += cent
             sum_rev += revenue
             sum_score += score
-            ch_revs[e] = revenue
+            
+            target = cent if optimize_for == "cent" else (score if optimize_for == "score" else revenue)
+            ch_targets[e] = target
+            
             row = [run_counter[0], ch_id, ppm_dict[e], f"{cent}", f"{from_paths}", f"{to_paths:.2f}", f"{revenue}", f"{score:.2f}"]
             iteration_results.append(row)
             
@@ -276,11 +293,12 @@ def run_centrality_sweep(mynode, input_csv=None, seed=42, refresh_graph=False):
             writer = csv.writer(f)
             writer.writerows(iteration_results)
             
-        evaluated_ppms_cache[cache_key] = (sum_rev, ch_revs)
-        return sum_rev, ch_revs
+        target_total = sum_cent if optimize_for == "cent" else (sum_score if optimize_for == "score" else sum_rev)
+        evaluated_ppms_cache[cache_key] = (target_total, ch_targets)
+        return target_total, ch_targets
 
     current_ppms = {e: best_ppm for e in mynode_v.out_edges()}
-    curr_total_rev, channel_revenues = evaluate_custom_ppms(current_ppms)
+    curr_total_target, channel_targets = evaluate_custom_ppms(current_ppms)
     
     json_file = "best_ppms.json"
     improved = True
@@ -390,7 +408,7 @@ def run_centrality_sweep(mynode, input_csv=None, seed=42, refresh_graph=False):
         json.dump(best_ppms, f, indent=4)
         
     logger.info(f"Best individual PPM settings saved to {json_file}")
-    print(f"\n=== Final Optimized Total Revenue of {curr_total_rev} was achieved ===")
+    print(f"\n=== Final Optimized Total {optimize_for} of {curr_total_target} was achieved ===")
 
 
 if __name__ == "__main__":
@@ -400,9 +418,10 @@ if __name__ == "__main__":
     parser.add_argument("--input-csv", type=str, default=None, help="Previous CSV results file to continue from")
     parser.add_argument("--seed", type=int, default=42, help="Random seed for tie-breaking epsilon")
     parser.add_argument("--refresh-graph", action="store_true", help="Fetch a new graph from the node instead of using cache")
+    parser.add_argument("--optimize-for", type=str, choices=["cent", "revenue", "score"], default="revenue", help="Metric to optimize for")
     args = parser.parse_args()
     
-    run_centrality_sweep(args.node, args.input_csv, args.seed, args.refresh_graph)
+    run_centrality_sweep(args.node, args.input_csv, args.seed, args.refresh_graph, args.optimize_for)
 
 
 
