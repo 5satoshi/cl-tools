@@ -18,7 +18,7 @@ logging.basicConfig(
 logger = logging.getLogger("RouteFinder")
 
 
-def run_centrality_sweep(mynode, input_csv=None, seed=42, refresh_graph=False, optimize_for="revenue"):
+def run_centrality_sweep(mynode, input_csv=None, seed=42, refresh_graph=False, optimize_for="revenue", max_ppm=32):
     random.seed(seed)
     
     rpc = os.environ.get('HOME', '')+"/.lightning/bitcoin/lightning-rpc"
@@ -158,7 +158,7 @@ def run_centrality_sweep(mynode, input_csv=None, seed=42, refresh_graph=False, o
     prev_ppm = 1
     prev_cent = cent_1
     current_ppm = 2
-    max_ppm_bound = 1000000
+    max_ppm_bound = max_ppm
     
     while True:
         curr_cent, curr_rev, curr_score, curr_act = evaluate_ppm(current_ppm)
@@ -419,9 +419,10 @@ if __name__ == "__main__":
     parser.add_argument("--seed", type=int, default=42, help="Random seed for tie-breaking epsilon")
     parser.add_argument("--refresh-graph", action="store_true", help="Fetch a new graph from the node instead of using cache")
     parser.add_argument("--optimize-for", type=str, choices=["cent", "revenue", "score"], default="revenue", help="Metric to optimize for")
+    parser.add_argument("--max-ppm", type=int, default=32, help="Maximum PPM bound for the optimization interval")
     args = parser.parse_args()
     
-    run_centrality_sweep(args.node, args.input_csv, args.seed, args.refresh_graph, args.optimize_for)
+    run_centrality_sweep(args.node, args.input_csv, args.seed, args.refresh_graph, args.optimize_for, args.max_ppm)
 
 
 
