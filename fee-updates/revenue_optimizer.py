@@ -305,8 +305,8 @@ def run_centrality_sweep(mynode, input_csv=None, seed=42, refresh_graph=False, o
     while improved:
         improved = False
         
-        # Avoid channels being stuck with 0 revenue
-        zero_channels = [e for e in mynode_v.out_edges() if channel_revenues[e] == 0 and current_ppms[e] > 0]
+        # Avoid channels being stuck with 0 target
+        zero_channels = [e for e in mynode_v.out_edges() if channel_targets[e] <= 0 and current_ppms[e] > 0]
         if zero_channels:
             orig_zero_ppms = {e: current_ppms[e] for e in zero_channels}
             active_zeros = zero_channels[:]
@@ -315,52 +315,52 @@ def run_centrality_sweep(mynode, input_csv=None, seed=42, refresh_graph=False, o
                 for e in active_zeros:
                     current_ppms[e] -= 1
                     
-                temp_rev, temp_ch_rev = evaluate_custom_ppms(current_ppms)
+                temp_target_total, temp_ch_targets = evaluate_custom_ppms(current_ppms)
                 
-                active_zeros = [e for e in active_zeros if temp_ch_rev[e] == 0 and current_ppms[e] > 0]
+                active_zeros = [e for e in active_zeros if temp_ch_targets[e] <= 0 and current_ppms[e] > 0]
                 
             for e in zero_channels:
-                if temp_ch_rev[e] == 0:
+                if temp_ch_targets[e] <= 0:
                     current_ppms[e] = orig_zero_ppms[e]
                 else:
                     improved = True
-                    logger.info(f"Restored revenue on {e_short_id[e]} by reducing PPM to {current_ppms[e]}")
+                    logger.info(f"Restored target on {e_short_id[e]} by reducing PPM to {current_ppms[e]}")
                     
             if improved:
-                curr_total_rev, channel_revenues = evaluate_custom_ppms(current_ppms)
+                curr_total_target, channel_targets = evaluate_custom_ppms(current_ppms)
                 continue
 
-        sorted_edges = sorted(channel_revenues.keys(), key=lambda e: channel_revenues[e], reverse=True)
-        curr_score = (curr_total_rev, sum(1 for v in channel_revenues.values() if v > 0))
+        sorted_edges = sorted(channel_targets.keys(), key=lambda e: channel_targets[e], reverse=True)
+        curr_score = (curr_total_target, sum(1 for v in channel_targets.values() if v > 0))
         
         for e in sorted_edges:
             orig_ppm = current_ppms[e]
             
             # Try +1
             current_ppms[e] = orig_ppm + 1
-            rev_plus, ch_rev_plus = evaluate_custom_ppms(current_ppms)
-            plus_score = (rev_plus, sum(1 for v in ch_rev_plus.values() if v > 0))
+            target_plus, ch_target_plus = evaluate_custom_ppms(current_ppms)
+            plus_score = (target_plus, sum(1 for v in ch_target_plus.values() if v > 0))
             
             # Try -1
-            rev_minus, ch_rev_minus = -1, {}
+            target_minus, ch_target_minus = -1, {}
             minus_score = (-1, -1)
             if orig_ppm > 0:
                 current_ppms[e] = orig_ppm - 1
-                rev_minus, ch_rev_minus = evaluate_custom_ppms(current_ppms)
-                minus_score = (rev_minus, sum(1 for v in ch_rev_minus.values() if v > 0))
+                target_minus, ch_target_minus = evaluate_custom_ppms(current_ppms)
+                minus_score = (target_minus, sum(1 for v in ch_target_minus.values() if v > 0))
                 
             if plus_score > curr_score and plus_score >= minus_score:
                 current_ppms[e] = orig_ppm + 1
-                curr_total_rev, channel_revenues = rev_plus, ch_rev_plus
+                curr_total_target, channel_targets = target_plus, ch_target_plus
                 curr_score = plus_score
-                logger.info(f"Increased PPM on {e_short_id[e]} to {orig_ppm + 1}. New total revenue: {curr_total_rev}")
+                logger.info(f"Increased PPM on {e_short_id[e]} to {orig_ppm + 1}. New total {optimize_for}: {curr_total_target}")
                 improved = True
                 break
             elif minus_score > curr_score:
                 current_ppms[e] = orig_ppm - 1
                 
                 dropped_channels = [other_e for other_e in mynode_v.out_edges() 
-                                    if other_e != e and ch_rev_minus[other_e] == 0 and channel_revenues[other_e] > 0 and current_ppms[other_e] > 0]
+                                    if other_e != e and ch_target_minus[other_e] <= 0 and channel_targets[other_e] > 0 and current_ppms[other_e] > 0]
                 
                 if dropped_channels:
                     orig_dropped_ppms = {other_e: current_ppms[other_e] for other_e in dropped_channels}
@@ -370,27 +370,27 @@ def run_centrality_sweep(mynode, input_csv=None, seed=42, refresh_graph=False, o
                         for other_e in active_dropped:
                             current_ppms[other_e] -= 1
                             
-                        temp_rev, temp_ch_rev = evaluate_custom_ppms(current_ppms)
+                        temp_target, temp_ch_target = evaluate_custom_ppms(current_ppms)
                         
-                        active_dropped = [other_e for other_e in active_dropped if temp_ch_rev[other_e] == 0 and current_ppms[other_e] > 0]
+                        active_dropped = [other_e for other_e in active_dropped if temp_ch_target[other_e] <= 0 and current_ppms[other_e] > 0]
                                 
-                    rev_combined, ch_rev_combined = temp_rev, temp_ch_rev
-                    combined_score = (rev_combined, sum(1 for v in ch_rev_combined.values() if v > 0))
+                    target_combined, ch_target_combined = temp_target, temp_ch_target
+                    combined_score = (target_combined, sum(1 for v in ch_target_combined.values() if v > 0))
                     
                     if combined_score >= minus_score:
-                        curr_total_rev, channel_revenues = rev_combined, ch_rev_combined
+                        curr_total_target, channel_targets = target_combined, ch_target_combined
                         curr_score = combined_score
-                        logger.info(f"Decreased PPM on {e_short_id[e]} to {orig_ppm - 1} AND adjusted {len(dropped_channels)} affected channels. New total revenue: {curr_total_rev}")
+                        logger.info(f"Decreased PPM on {e_short_id[e]} to {orig_ppm - 1} AND adjusted {len(dropped_channels)} affected channels. New total {optimize_for}: {curr_total_target}")
                     else:
                         for other_e in dropped_channels:
                             current_ppms[other_e] = orig_dropped_ppms[other_e]
-                        curr_total_rev, channel_revenues = rev_minus, ch_rev_minus
+                        curr_total_target, channel_targets = target_minus, ch_target_minus
                         curr_score = minus_score
-                        logger.info(f"Decreased PPM on {e_short_id[e]} to {orig_ppm - 1}. New total revenue: {curr_total_rev}")
+                        logger.info(f"Decreased PPM on {e_short_id[e]} to {orig_ppm - 1}. New total {optimize_for}: {curr_total_target}")
                 else:
-                    curr_total_rev, channel_revenues = rev_minus, ch_rev_minus
+                    curr_total_target, channel_targets = target_minus, ch_target_minus
                     curr_score = minus_score
-                    logger.info(f"Decreased PPM on {e_short_id[e]} to {orig_ppm - 1}. New total revenue: {curr_total_rev}")
+                    logger.info(f"Decreased PPM on {e_short_id[e]} to {orig_ppm - 1}. New total {optimize_for}: {curr_total_target}")
                     
                 improved = True
                 break
