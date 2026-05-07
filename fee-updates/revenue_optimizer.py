@@ -108,12 +108,13 @@ def run_centrality_sweep(mynode, input_csv=None, seed=42, refresh_graph=False):
             from_paths = e_counts_temp[e]
             cent = max(0, int(round(e_betw_temp[e])) - from_paths)
             to_paths = cent / from_paths if from_paths > 0 else 0
-            min_paths = min(from_paths, to_paths)
+            
+            adj_from_paths = max(0, from_paths - math.sqrt(from_paths))
+            adj_to_paths = max(0, to_paths - math.sqrt(to_paths))
+            adj_cent = adj_from_paths * adj_to_paths
             
             revenue = cent * current_ppm
-            std_dev_cent = cent / math.sqrt(min_paths) if min_paths > 0 else cent
-            std_dev_rev = std_dev_cent * current_ppm
-            score = revenue - std_dev_rev
+            score = adj_cent * current_ppm
             
             sum_cent += cent
             sum_rev += revenue
