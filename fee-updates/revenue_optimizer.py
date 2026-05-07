@@ -63,7 +63,7 @@ def run_centrality_sweep(mynode, input_csv=None, seed=42, refresh_graph=False):
     csv_file = "centrality_sweep_results.csv"
     with open(csv_file, mode='w', newline='') as f:
         writer = csv.writer(f)
-        writer.writerow(["Run_Number", "Channel", "PPM", "Edge_Centrality", "from_paths", "Revenue_Potential", "Score"])
+        writer.writerow(["Run_Number", "Channel", "PPM", "Edge_Centrality", "from_paths", "to_paths", "Revenue_Potential", "Score"])
 
     run_counter = [0]
     evaluated_uniform_cache = {}
@@ -121,7 +121,7 @@ def run_centrality_sweep(mynode, input_csv=None, seed=42, refresh_graph=False):
             sum_score += score
             if revenue > 0:
                 active_channels += 1
-            row = [run_counter[0], ch_id, current_ppm, f"{cent}", f"{from_paths}", f"{revenue}", f"{score}"]
+            row = [run_counter[0], ch_id, current_ppm, f"{cent}", f"{from_paths}", f"{to_paths:.2f}", f"{revenue}", f"{score:.2f}"]
             results.append(row)
             iteration_results.append(row)
             
@@ -129,7 +129,7 @@ def run_centrality_sweep(mynode, input_csv=None, seed=42, refresh_graph=False):
             writer = csv.writer(f)
             writer.writerows(iteration_results)
             
-        logger.info(f"Uniform PPM {current_ppm} completed | Sum Centrality: {sum_cent} | Total Revenue: {sum_rev} | Active Channels: {active_channels}")
+        logger.info(f"Uniform PPM {current_ppm} completed | Sum Centrality: {sum_cent} | Total Revenue: {sum_rev} | Total Score: {sum_score:.2f} | Active Channels: {active_channels}")
         evaluated_uniform_cache[current_ppm] = (sum_cent, sum_rev, active_channels)
         return sum_cent, sum_rev, active_channels
 
@@ -250,15 +250,26 @@ def run_centrality_sweep(mynode, input_csv=None, seed=42, refresh_graph=False):
                 curr = v_p
                 
         sum_rev = 0
+        sum_score = 0
         ch_revs = {}
         iteration_results = []
         for e in mynode_v.out_edges():
             ch_id = e_short_id[e]
-            cent = max(0, int(round(e_betw_temp[e])) - e_counts_temp[e])
+            from_paths = e_counts_temp[e]
+            cent = max(0, int(round(e_betw_temp[e])) - from_paths)
+            to_paths = cent / from_paths if from_paths > 0 else 0
+            
+            adj_from_paths = max(0, from_paths - math.sqrt(from_paths))
+            adj_to_paths = max(0, to_paths - math.sqrt(to_paths))
+            adj_cent = adj_from_paths * adj_to_paths
+            
             revenue = cent * ppm_dict[e]
+            score = adj_cent * ppm_dict[e]
+            
             sum_rev += revenue
+            sum_score += score
             ch_revs[e] = revenue
-            row = [run_counter[0], ch_id, ppm_dict[e], f"{cent}", f"{e_counts_temp[e]}", f"{revenue}"]
+            row = [run_counter[0], ch_id, ppm_dict[e], f"{cent}", f"{from_paths}", f"{to_paths:.2f}", f"{revenue}", f"{score:.2f}"]
             iteration_results.append(row)
             
         with open(csv_file, mode='a', newline='') as f:
