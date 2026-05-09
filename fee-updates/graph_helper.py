@@ -2,6 +2,28 @@ import os
 import pandas as pd
 import graph_tool.all as gt
 from pyln.client import LightningRpc
+from configparser import ConfigParser
+
+def read_config(section, filename):
+    """ Read database configuration file and return a dictionary object
+    :param filename: name of the configuration file
+    :param section: section of database configuration
+    :return: a dictionary of database parameters
+    """
+    # create parser and read ini configuration file
+    parser = ConfigParser()
+    parser.read(filename)
+    
+    # get section
+    d = {}
+    if parser.has_section(section):
+        items = parser.items(section)
+        for item in items:
+            d[item[0]] = item[1]
+    else:
+        raise Exception('{0} not found in the {1} file'.format(section,     filename))
+    
+    return d
 
 def load_or_fetch_graph(rpc=".lightning/bitcoin/lightning-rpc", cache_file="graph.gt", refresh=False):
     if not refresh and os.path.exists(cache_file):
