@@ -25,6 +25,36 @@ def read_config(section, filename):
     
     return d
 
+def get_filtered_graph_and_node(mynode, refresh_graph=False, tx_sat_cent=80000, rpc=None):
+    if rpc is None:
+        rpc = os.environ.get('HOME', '') + "/.lightning/bitcoin/lightning-rpc"
+    G = load_or_fetch_graph(rpc, refresh=refresh_graph)
+    
+    if tx_sat_cent is not None:
+        tx_msat = tx_sat_cent * 1000
+        e_active = G.edge_properties["active"]
+        e_htlc_max = G.edge_properties["htlc_maximum_msat"]
+        e_filt = G.new_edge_property("bool")
+        e_filt.a = e_active.a & (e_htlc_max.a >= tx_msat)
+        wDG = gt.GraphView(G, efilt=e_filt)
+    else:
+        e_active = G.edge_properties["active"]
+        wDG = gt.GraphView(G, efilt=e_active)
+        
+    comp, hist = gt.label_components(wDG)
+    largest_comp = hist.argmax()
+    v_filt = wDG.new_vertex_property("bool")
+    v_filt.a = (comp.a == largest_comp)
+    DG = gt.GraphView(wDG, vfilt=v_filt)
+    
+    v_id = DG.vertex_properties["id"]
+    try:
+        mynode_v = gt.find_vertex(DG, v_id, mynode)[0]
+    except IndexError:
+        mynode_v = None
+        
+    return DG, mynode_v
+
 def load_or_fetch_graph(rpc=".lightning/bitcoin/lightning-rpc", cache_file="graph.gt", refresh=False):
     if not refresh and os.path.exists(cache_file):
         return gt.load_graph(cache_file)

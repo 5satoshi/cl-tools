@@ -2,7 +2,7 @@
 
 import sys, math, os, random, logging, json, argparse
 import graph_tool.all as gt
-from graph_helper import load_or_fetch_graph
+from graph_helper import load_or_fetch_graph, get_filtered_graph_and_node
 
 logging.basicConfig(
     level=logging.INFO,
@@ -11,29 +11,19 @@ logging.basicConfig(
 logger = logging.getLogger("PpmMaxFinder")
 
 def run_ppm_max_search(mynode, refresh_graph=False):
-    rpc = os.environ.get('HOME', '') + "/.lightning/bitcoin/lightning-rpc"
-    G = load_or_fetch_graph(rpc, refresh=refresh_graph)
-    
-    e_active = G.edge_properties["active"]
-    wDG = gt.GraphView(G, efilt=e_active)
-    
-    comp, hist = gt.label_components(wDG)
-    largest_comp = hist.argmax()
-    v_filt = wDG.new_vertex_property("bool")
-    v_filt.a = (comp.a == largest_comp)
-    DG = gt.GraphView(wDG, vfilt=v_filt)
-    
+    tx_sat_cent = 80000
+    DG, mynode_v = get_filtered_graph_and_node(mynode, refresh_graph=refresh_graph, tx_sat_cent=None)
+    if mynode_v is None:
+        logger.error("Node not found in the largest component of the graph.")
+        return
+        
     v_id = DG.vertex_properties["id"]
-    mynode_v = gt.find_vertex(DG, v_id, mynode)[0]
-    
     e_base_fee = DG.edge_properties["base_fee_millisatoshi"]
     e_fee_rate = DG.edge_properties["fee_per_millionth"]
     e_short_id = DG.edge_properties["short_channel_id"]
     
     for e in mynode_v.out_edges():
         e_base_fee[e] = 0
-        
-    tx_sat_cent = 80000
     e_weight = DG.new_edge_property("double")
     e_epsilon = DG.new_edge_property("double")
     for e in DG.edges():

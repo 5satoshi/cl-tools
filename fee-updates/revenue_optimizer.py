@@ -9,7 +9,7 @@ from tqdm import tqdm
 import csv
 import numpy as np
 import json
-from graph_helper import load_or_fetch_graph
+from graph_helper import load_or_fetch_graph, get_filtered_graph_and_node
 
 logging.basicConfig(
     level=logging.INFO,
@@ -21,29 +21,13 @@ logger = logging.getLogger("RouteFinder")
 def run_centrality_sweep(mynode, input_csv=None, seed=42, refresh_graph=False, optimize_for="revenue", max_ppm=32):
     random.seed(seed)
     
-    rpc = os.environ.get('HOME', '')+"/.lightning/bitcoin/lightning-rpc"
-    G = load_or_fetch_graph(rpc, refresh=refresh_graph)
-    
     tx_sat_cent = 80000
-    tx_msat = tx_sat_cent * 1000
-    
-    e_active = G.edge_properties["active"]
-    e_htlc_max = G.edge_properties["htlc_maximum_msat"]
-    
-    e_filt = G.new_edge_property("bool")
-    e_filt.a = e_active.a & (e_htlc_max.a >= tx_msat)
-    
-    wDG = gt.GraphView(G, efilt=e_filt)
-    
-    # clean for connected component
-    comp, hist = gt.label_components(wDG)
-    largest_comp = hist.argmax()
-    v_filt = wDG.new_vertex_property("bool")
-    v_filt.a = (comp.a == largest_comp)
-    DG = gt.GraphView(wDG, vfilt=v_filt)
-    
+    DG, mynode_v = get_filtered_graph_and_node(mynode, refresh_graph=refresh_graph, tx_sat_cent=tx_sat_cent)
+    if mynode_v is None:
+        logger.error("Node not found in the largest component of the graph.")
+        return
+        
     v_id = DG.vertex_properties["id"]
-    mynode_v = gt.find_vertex(DG, v_id, mynode)[0]
     
     e_base_fee = DG.edge_properties["base_fee_millisatoshi"]
     e_fee_rate = DG.edge_properties["fee_per_millionth"]
