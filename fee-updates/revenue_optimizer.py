@@ -68,15 +68,7 @@ def run_centrality_sweep(mynode, input_csv=None, seed=42, refresh_graph=False, o
     run_counter = [0]
     evaluated_uniform_cache = {}
 
-    def evaluate_ppm(current_ppm):
-        if current_ppm in evaluated_uniform_cache:
-            return evaluated_uniform_cache[current_ppm]
-            
-        run_counter[0] += 1
-        logger.info(f"Evaluating uniform PPM: {current_ppm}")
-        for e in mynode_v.out_edges():
-            e_fee_rate[e] = current_ppm
-            
+    def update_graph_and_get_metrics():
         for e in DG.edges():
             a = e_base_fee[e]
             b = e_fee_rate[e] / 1000000.0
@@ -96,6 +88,19 @@ def run_centrality_sweep(mynode, input_csv=None, seed=42, refresh_graph=False, o
                 e_edge = DG.edge(v_p, curr)
                 if e_edge: e_counts_temp[e_edge] += 1
                 curr = v_p
+                
+        return e_betw_temp, e_counts_temp
+
+    def evaluate_ppm(current_ppm):
+        if current_ppm in evaluated_uniform_cache:
+            return evaluated_uniform_cache[current_ppm]
+            
+        run_counter[0] += 1
+        logger.info(f"Evaluating uniform PPM: {current_ppm}")
+        for e in mynode_v.out_edges():
+            e_fee_rate[e] = current_ppm
+            
+        e_betw_temp, e_counts_temp = update_graph_and_get_metrics()
                 
         sum_cent = 0
         sum_rev = 0
@@ -241,25 +246,7 @@ def run_centrality_sweep(mynode, input_csv=None, seed=42, refresh_graph=False, o
         for e in mynode_v.out_edges():
             e_fee_rate[e] = ppm_dict[e]
             
-        for e in DG.edges():
-            a = e_base_fee[e]
-            b = e_fee_rate[e] / 1000000.0
-            e_weight[e] = math.floor(a + tx_sat_cent * b * 1000) + e_epsilon[e]
-            
-        _, e_betw_temp = gt.betweenness(DG, weight=e_weight, norm=False)
-        _, pred_map_temp = gt.shortest_distance(DG, source=mynode_v, weights=e_weight, pred_map=True)
-        
-        e_counts_temp = DG.new_edge_property("int")
-        for v in DG.vertices():
-            if v == mynode_v: continue
-            curr = v
-            while curr != mynode_v:
-                p = pred_map_temp[curr]
-                if p == int(curr): break
-                v_p = DG.vertex(p)
-                e_edge = DG.edge(v_p, curr)
-                if e_edge: e_counts_temp[e_edge] += 1
-                curr = v_p
+        e_betw_temp, e_counts_temp = update_graph_and_get_metrics()
                 
         sum_cent = 0
         sum_rev = 0
