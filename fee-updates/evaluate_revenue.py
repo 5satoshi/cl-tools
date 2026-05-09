@@ -161,8 +161,8 @@ def evaluate_revenue(mynode, input_json, seed=42, refresh_graph=False):
     print(f"{'Total':<15} | {'- / ' + str(sum_cent_curr) + ' / - / ' + str(sum_rev_curr):<30} | {'- / ' + str(sum_cent_opt) + ' / - / ' + str(sum_rev_opt):<30} | {(sum_rev_opt - sum_rev_curr):<+10d} | {(sum_cent_opt - sum_cent_curr):+d}")
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--node", type=str, default="03fe8461ebc025880b58021c540e0b7782bb2bcdc99da9822f5c6d2184a59b8f69")
+    parser = argparse.ArgumentParser(description="Evaluate and compare revenue between current/baseline policies and optimized PPM policies.")
+    parser.add_argument("--node", type=str, default="03fe8461ebc025880b58021c540e0b7782bb2bcdc99da9822f5c6d2184a59b8f69", help="Pubkey of the node to evaluate")
     parser.add_argument("--input-json", type=str, default="best_ppms.json", help="JSON file containing best PPMs")
     parser.add_argument("--seed", type=int, default=42, help="Random seed for tie-breaking epsilon")
     parser.add_argument("--refresh-graph", action="store_true", help="Fetch a new graph from the node instead of using cache")

@@ -71,8 +71,8 @@ def run_edge_cases(mynode, seed=42, refresh_graph=False):
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--node", type=str, default="03fe8461ebc025880b58021c540e0b7782bb2bcdc99da9822f5c6d2184a59b8f69")
+    parser = argparse.ArgumentParser(description="Compute and compare node channel centralities at extreme fee settings (0, 1, and 1,000,000 PPM).")
+    parser.add_argument("--node", type=str, default="03fe8461ebc025880b58021c540e0b7782bb2bcdc99da9822f5c6d2184a59b8f69", help="Pubkey of the node to analyze")
     parser.add_argument("--seed", type=int, default=42, help="Random seed for tie-breaking epsilon")
     parser.add_argument("--refresh-graph", action="store_true", help="Fetch a new graph from the node instead of using cache")
     args = parser.parse_args()

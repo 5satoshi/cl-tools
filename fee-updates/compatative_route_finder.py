@@ -106,8 +106,8 @@ def run_compatative_route_finder(mynode, seed=42, refresh_graph=False):
     return CompetitiveGraph
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--node", type=str, default="03fe8461ebc025880b58021c540e0b7782bb2bcdc99da9822f5c6d2184a59b8f69")
+    parser = argparse.ArgumentParser(description="Identify the most competitive channels by comparing routing centrality at high vs. low fee rates.")
+    parser.add_argument("--node", type=str, default="03fe8461ebc025880b58021c540e0b7782bb2bcdc99da9822f5c6d2184a59b8f69", help="Pubkey of the node to analyze")
     parser.add_argument("--seed", type=int, default=42, help="Random seed for tie-breaking epsilon")
     parser.add_argument("--refresh-graph", action="store_true", help="Fetch a new graph from the node instead of using cache")
     args = parser.parse_args()

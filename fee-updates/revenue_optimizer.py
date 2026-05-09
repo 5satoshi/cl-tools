@@ -384,8 +384,8 @@ def run_centrality_sweep(mynode, input_csv=None, seed=42, refresh_graph=False, o
 
 if __name__ == "__main__":
     # execute only if run as a script
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--node", type=str, default="03fe8461ebc025880b58021c540e0b7782bb2bcdc99da9822f5c6d2184a59b8f69")
+    parser = argparse.ArgumentParser(description="Optimize channel fee rates (PPM) to maximize revenue, centrality, or a combined score using betweenness centrality.")
+    parser.add_argument("--node", type=str, default="03fe8461ebc025880b58021c540e0b7782bb2bcdc99da9822f5c6d2184a59b8f69", help="Pubkey of the node to optimize")
     parser.add_argument("--input-csv", type=str, default=None, help="Previous CSV results file to continue from")
     parser.add_argument("--seed", type=int, default=42, help="Random seed for tie-breaking epsilon")
     parser.add_argument("--refresh-graph", action="store_true", help="Fetch a new graph from the node instead of using cache")
